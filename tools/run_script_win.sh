@@ -12,6 +12,7 @@ python -m ectf_tools build.car_fob_pair  --design ..\2023-ectf-UB-Cacti-design -
 python -m ectf_tools build.fob --design ..\2023-ectf-UB-Cacti-design\ --name ub_test --deployment ub_depl --fob-out fob_out --fob-name fob_ub
 
 # 3.3 Load Device
+# before loading the device, use uniflash to load bootloader to the board first
 python -m ectf_tools device.load_hw --dev-in car_out --dev-name car_ub --dev-serial COM4
 
 # 3.4 Start Bridge
