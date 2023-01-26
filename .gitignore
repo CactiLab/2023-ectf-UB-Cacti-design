@@ -1,2 +1,8 @@
 
-.vscode/launch.json
+.vscode/
+
+*.deleteme
+*.aux
+*.gz
+*.log
+docs/SystemDesign.pdf

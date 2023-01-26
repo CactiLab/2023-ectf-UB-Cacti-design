@@ -1,0 +1,223 @@
+%==============================================================================
+\documentclass[11pt,oneside,onecolumn,letterpaper]{article}
+\usepackage{times}
+\usepackage[paperwidth=8.5in, paperheight=11in,
+top=2.5cm, bottom=2.6cm, left=2.58cm, right=2.53cm]{geometry}
+%\setlength{\textheight} {9.00in}
+%\setlength{\textwidth}  {6.40in}
+%\setlength{\topmargin}  {-0.50in}
+%%\setlength{\headheight} {0.00in}
+%%\setlength{\headsep}     {0.40in}
+%\setlength{\oddsidemargin}{-0.010in}
+%\setlength{\evensidemargin}{-0.00in}
+%==============================================================================
+%\usepackage{algorithm}
+\usepackage{amssymb}
+\usepackage{color,soul}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{latexsym}
+\usepackage{subfigure}
+\usepackage{wrapfig}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage[hyphens]{url}
+\usepackage{pifont}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{indentfirst}
+\usepackage[lined, boxed, linesnumbered]{algorithm2e}
+\usepackage[square, comma, sort&compress, numbers]{natbib}
+
+\newcounter{alg}
+\newenvironment{enum-ref}{
+\begin{list}%
+{[\arabic{alg}]} {\usecounter{alg}
+  \setlength{\leftmargin} {0.25in}
+  \setlength{\labelwidth} {0.30in}
+  \setlength{\rightmargin}{0.00in}
+  \setlength{\topsep}     {0.00in}}
+}{\end{list}}
+
+\newenvironment{enum-number}{
+\begin{list}%
+{\arabic{alg})} {\usecounter{alg}
+  \setlength{\leftmargin} {0.25in}
+  \setlength{\labelwidth} {0.30in}
+  \setlength{\rightmargin}{0.00in}
+  \setlength{\topsep}     {0.00in}}
+}{\end{list}}
+
+\newenvironment{enum-nonum}{
+\begin{list}%
+{$\bullet$} {
+  \setlength{\leftmargin} {0.25in}
+  \setlength{\labelwidth} {0.30in}
+  \setlength{\rightmargin}{0.00in}
+  \setlength{\topsep}     {0.00in}}
+}{\end{list}}
+
+\newcommand{\ziming}[1]{%
+  \begingroup
+  \definecolor{hlcolor}{RGB}{20, 255, 20}\sethlcolor{hlcolor}%
+  \textcolor{black}{\hl{\textit{\textbf{Ziming:} #1}}}%
+  \endgroup
+}
+
+\let\chapter\section
+
+%==============================================================================
+\pagestyle{plain}
+%==============================================================================
+
+\title{Protected Automotive Remote Entry Device (PARED) \\ System Design}
+\author{MITRE eCTF 2023\\Team \textbf{Cacti}\\ University at Buffalo}
+\date{}
+
+
+
+\begin{document}
+%%
+%=============================================================================
+\normalsize
+
+
+\maketitle
+%\date{}
+
+\renewcommand{\thepage}{System Design, Team Cacti, University at Buffalo--\arabic{page}}
+\setcounter{page}{1} \normalsize
+%
+%\renewcommand{\baselinestretch}{1.2}
+%\normalsize
+%\vspace{0.1in}
+%\centerline{\textbf{\Large }}
+%\renewcommand{\baselinestretch}{1.0}
+%\normalsize
+
+\newcommand{\flagRollback}{\textsf{Rollback}\xspace}
+
+\section{Introduction}
+
+This section presents the entities and communication channels in the system.
+
+\subsection{Entities}
+
+The following summarizes the entities in the system.
+
+\section{Security Requirements}
+
+This section defines the security requirements of our design.
+
+\subsection{SR1}
+\textbf{A car should only unlock and start when the user has an authentic fob that is paired with the car.}
+
+In the reference design, ...
+
+\paragraph{How we address it:} ...
+
+\subsection{SR2}
+\textbf{Revoking an attacker's physical access to a fob should also revoke their ability to unlock the associated car.}
+
+In the reference design, ...
+
+\paragraph{How we address it:} ...
+
+\subsection{SR3}
+\textbf{Observing the communications between a fob and a car while unlocking should not allow an attacker to unlock the car in the future.}
+
+In the reference design, ...
+
+\paragraph{How we address it:} ...
+
+\subsection{SR4}
+\textbf{Having an unpaired fob should not allow an attacker to unlock a car without a corresponding paired fob and pairing PIN.}
+
+In the reference design, ...
+
+\paragraph{How we address it:} ...
+
+\subsection{SR5}
+\textbf{A car owner should not be able to add new features to a fob that did not get packaged by the manufacturer.}
+
+In the reference design, ...
+
+\paragraph{How we address it:} ...
+
+\subsection{SR6}
+\textbf{Access to a feature packaged for one car should not allow an attacker to enable the same feature on another car.}
+
+In the reference design, ...
+
+\paragraph{How we address it:} ...
+
+
+
+\section{Security Implementations}
+
+
+
+\subsection{Build PARED System}
+
+\subsubsection{Build Environment}
+
+This step will build the docker image from the Dockerfile. We will list all the additional packages we used besides those are in the reference design.
+
+\subsubsection{Build Tools}
+
+\textit{The resulting host tools will be given to the other teams in the Attack Phase.}
+
+Our host tools are written in Python, thus this step will simply copy all the tools in to the docker container.
+
+\subsubsection{Build Deployment}
+
+\textit{Attackers will NEVER be given access to the Host Secrets generated in this step.}
+
+In our design, the Host Secrets contain two parts: the Global Secret and the Car Secrets, and they will be saved in the "secrets" docker volume.
+This step will generate the Global Secret, which is a deployment-wide secret shared across cars and/or fobs.
+
+We generate the Global Secret randomly, to prevent the attacker from retrieving it through reverse engineering.
+
+\subsubsection{Build Car, Paired Fob, and Unpaired Fob}
+
+\textit{The plaintext firmware and EEPROM files produced in these steps are not given to attackers except for the car and paired fob of Car 0 that will not contain any flags.}
+
+\textit{These build steps may read and modify the Host Secrets.}
+
+To build the car binaries, a car ID will be supplied as a flag to the building tools. We will:
+\begin{itemize}
+	\item Check whether the car secret that corresponding to this car ID exists in the "secrets" docker volume.
+	\item If it not exists, we randomly generate one, and save it into the "secrets" docker volume.
+	\item This car secret will get loaded into the car EEPROM data. The car ID will be saved in the car firmware.
+\end{itemize}
+
+To build the paired fob binaries, a car ID (corresponding to this fob) and a fob pairing PIN will be supplied as a flag to the building tools. We will:
+\begin{itemize}
+	\item Retrieve the car secret which corresponding to this car ID from the "secrets" docker volume.
+	\item Retrieve the global secret from the "secrets" docker volume.
+	\item Save the car secret and global secret into the paired fob EEPROM data. Save the car ID and fob pairing PIN in the paired fob firmware.
+\end{itemize}
+
+To build the unpaired fob binaries, we will:
+\begin{itemize}
+	\item Retrieve the global secret from the "secrets" docker volume.
+	\item Save the global secret into the paired fob EEPROM data.
+\end{itemize}
+
+\subsection{Load Devices}
+
+\textit{Teams will not be able to modify any part of this step.}
+
+After building the system, the firmware and EEPROM contents are loaded onto the microcontrollers by the provided tools.
+
+\subsection{Host Tools}
+
+\subsubsection{Package Feature}
+
+\textit{Attackers will be given access to the packaged feature produced in this step in many scenarios.}
+
+
+
+
+\end{document}
+%==============================================================================
