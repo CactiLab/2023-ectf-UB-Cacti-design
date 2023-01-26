@@ -229,7 +229,7 @@ The resulting packaged feature is encrypted by the car secret.
 
 \textit{This tool will not have access to Host Secrets.}
 
-The following describe the sequence of pairing an unpaired key fob. It requires the host tool, a paired fob device and an unpaired fob. The host tool takes a pairing PIN as an argument, which needs to be the same pairing PIN as saved in the paired fob.
+The following describe the sequence of pairing an unpaired key fob. It requires the host tool, a paired fob device and an unpaired fob. The paired and unpaired fobs are connected to the host computer through the UART0, and also connect each other through the UART0. The host tool takes a pairing PIN as an argument, which needs to be the same pairing PIN as saved in the paired fob.
 \begin{enumerate}
 	\item The host tool starts the connection to both the paired and unpaired fob's UART0 sockets for serial transaction.
 	\item The host tool sends the \textit{pair} command to both the paired and unpaired fob's sockets.
@@ -237,7 +237,8 @@ The following describe the sequence of pairing an unpaired key fob. It requires 
 	\item After the unpaired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pairing info package from the UART1 socket which connects to the paired fob.
 	\item The host tool sends the pairing PIN to the paired fob's UART0 socket.
 	\item The paired fob receives the pairing PIN and check it with the saved one. If it matches, the paired fob will send the pairing info package to the UART1 socket. If it does not match, the paired fob will lockout for 3 seconds before resuming to listen to the UART messages.
-	\item If the unpaired fob receives the pairing info package through the UART1 socket which connects to the paired fob, it will process the received package and use the info inside to register it as a paired fob. Then it sends the pairing successful message to the UART0 to the host tool.
+	\item If the unpaired fob receives the pairing info package through the UART1 socket which connects to the paired fob, it will process the received package and use the info inside to register it as a paired fob. 
+	\item The unpaired fob (now it's paired) sends the pairing successful message to the UART0 to the host tool.
 \end{enumerate}
 
 Notes:
@@ -245,6 +246,39 @@ Notes:
 	\item If the pairing PIN check in the paired fob fails, the paired fob will enter the lockout mode which blocks all the UART communication for 3 seconds. This is to prevent the brute force cracking of the pairing PIN.
 	\item The pairing info package contains the car ID, the car secret and the pairing PIN.
 \end{itemize}
+
+\subsubsection{Enable Feature}
+
+\textit{This tool will not have access to Host Secrets.}
+
+The following describe the sequence of enabling a feature on a paired key fob. It requires the host tool, a paired fob device and the packaged feature. The paired fob is connected to the host computer through the UART0.
+\begin{enumerate}
+	\item The host tool starts the connection to the paired fob's UART0 sockets for serial transaction.
+	\item The host tool sends the \textit{enable} command to the paired fob's socket.
+	\item After the paired fob receives the \textit{enable} command, it will enter the state to waiting for receiving the packaged feature from the same UART0 socket.
+	\item The host tool opens and sends the content of the packaged feature to the paired fob's socket.
+	\item The paired fob receives and decrypts the package. If 1) the car ID in package matches the saved car ID, 2) the enabled feature list is not full, and 3) this feature has not been  enabled previously, the paired fob will enable this feature and save the new feature list.
+	\item The paired fob sends the enable successful message to the UART0 to the host tool.
+\end{enumerate}
+
+Notes:
+\begin{itemize}
+	\item The paired fob uses the car secret to decrypt the received package.
+\end{itemize}
+
+\subsubsection{Unlock and Start Car}
+
+\textit{This tool will not have access to Host Secrets.}
+
+The following describe the sequence of unlocking the car with a paired fob. It requires the host tool, a paired fob device and a car device. The car device is connected to the host computer through the UART0, and the paired fob connects to the car through the UART1. The connection between the car device and the host computer is only responsible for transmitting the messages that get printed out after the successful unlock.
+\begin{enumerate}
+	\item The user press the SW1 button on the paired fob.
+	\item The paired fob sends the \textit{unlock} command to the UART1 socket.
+	\item After the car receives the \textit{unlock} command, it will generate a random number. Then this random number gets encrypted by the saved car secret. The result of this encryption is called \textit{challenge}.
+	\item The car sends the \textit{challenge} package to the the UART1 socket, and enter the state to waiting for receiving a respond from the same UART1 socket.
+	\item The paired fob receives the \textit{challenge} package and decrypt it using the saved car secret. The decrypted package (number) is called \textit{answer}. Then the paired fob sends this \textit{answer} package back to the UART1 socket.
+	\item The car receives the \textit{answer} package and verify if it matches the previous generated random number. If it matches, the car will send the unlock message to the UART0 socket, and start the car (send the enabled feature list to the UART0 socket).
+\end{enumerate}
 
 \end{document}
 %==============================================================================
