@@ -230,6 +230,15 @@ The resulting packaged feature is encrypted by the car secret.
 \textit{This tool will not have access to Host Secrets.}
 
 The following describe the sequence of pairing an unpaired key fob. It requires the host tool, a paired fob device and an unpaired fob. The paired and unpaired fobs are connected to the host computer through the UART0, and also connect each other through the UART0. The host tool takes a pairing PIN as an argument, which needs to be the same pairing PIN as saved in the paired fob.
+
+\begin{figure}[!htbp]
+	\begin{centering}
+		\includegraphics[width = .6\textwidth]{pic/pair.pdf}
+		\caption{Pair Fob Sequence}
+		\label{fig:pair}
+	\end{centering}
+\end{figure}
+
 \begin{enumerate}
 	\item The host tool starts the connection to both the paired and unpaired fob's UART0 sockets for serial transaction.
 	\item The host tool sends the \textit{pair} command to both the paired and unpaired fob's sockets.
@@ -252,6 +261,15 @@ Notes:
 \textit{This tool will not have access to Host Secrets.}
 
 The following describe the sequence of enabling a feature on a paired key fob. It requires the host tool, a paired fob device and the packaged feature. The paired fob is connected to the host computer through the UART0.
+
+\begin{figure}[!htbp]
+	\begin{centering}
+		\includegraphics[width = .5\textwidth]{pic/enable.pdf}
+		\caption{Enable Feature Sequence}
+		\label{fig:enable}
+	\end{centering}
+\end{figure}
+
 \begin{enumerate}
 	\item The host tool starts the connection to the paired fob's UART0 sockets for serial transaction.
 	\item The host tool sends the \textit{enable} command to the paired fob's socket.
@@ -271,9 +289,18 @@ Notes:
 \textit{This tool will not have access to Host Secrets.}
 
 The following describe the sequence of unlocking the car with a paired fob. It requires the host tool, a paired fob device and a car device. The car device is connected to the host computer through the UART0, and the paired fob connects to the car through the UART1. The connection between the car device and the host computer is only responsible for transmitting the messages that get printed out after the successful unlock.
+
+\begin{figure}[!htbp]
+	\begin{centering}
+		\includegraphics[width = .6\textwidth]{pic/unlock.pdf}
+		\caption{Unlock Car Sequence}
+		\label{fig:unlock}
+	\end{centering}
+\end{figure}
+
 \begin{enumerate}
 	\item The user press the SW1 button on the paired fob.
-	\item The paired fob sends the \textit{unlock} command to the UART1 socket.
+	\item The paired fob sends the \textit{unlock} command to the UART1 socket, and enter the state to waiting for receiving a respond from the same UART1 socket.
 	\item After the car receives the \textit{unlock} command, it will generate a random number. Then this random number gets encrypted by the saved car secret. The result of this encryption is called \textit{challenge}.
 	\item The car sends the \textit{challenge} package to the the UART1 socket, and enter the state to waiting for receiving a respond from the same UART1 socket.
 	\item The paired fob receives the \textit{challenge} package and decrypt it using the saved car secret. The decrypted package (number) is called \textit{answer}. Then the paired fob sends this \textit{answer} package back to the UART1 socket.
