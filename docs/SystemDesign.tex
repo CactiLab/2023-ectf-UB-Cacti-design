@@ -175,6 +175,14 @@ Our host tools are written in Python, thus this step will simply copy all the to
 
 In our design, the Host Secrets contain two parts: the Global Secret and the Car Secrets, and they will be saved in the \textit{secrets} docker volume.
 
+\begin{figure}[!htbp]
+	\begin{centering}
+		\includegraphics[width = .6\textwidth]{pic/build_depl.pdf}
+		\caption{Host Secrets and Build Deployment Step}
+		\label{fig:build_depl}
+	\end{centering}
+\end{figure}
+
 This step will generate the Global Secret, which is a deployment-wide secret shared across cars and/or fobs.
 The Global Secret is a pair of asymmetric encryption keys which contains a private key and a public key.
 The private key is used to package the feature and will never get loaded to any of the car/fob devices.
@@ -187,6 +195,14 @@ We generate the Global Secret randomly, to prevent the attacker from retrieving 
 \textit{The plaintext firmware and EEPROM files produced in these steps are not given to attackers except for the car and paired fob of Car 0 that will not contain any flags.}
 
 \textit{These build steps may read and modify the Host Secrets.}
+
+\begin{figure}[!htbp]
+	\begin{centering}
+		\includegraphics[width = .6\textwidth]{pic/build_step.pdf}
+		\caption{Build Steps}
+		\label{fig:build_step}
+	\end{centering}
+\end{figure}
 
 To build the car binaries, a car ID will be supplied as a flag to the building tools. We will:
 \begin{itemize}
@@ -220,6 +236,14 @@ After building the system, the firmware and EEPROM contents are loaded onto the 
 \subsubsection{Package Feature}
 
 \textit{Attackers will be given access to the packaged feature produced in this step in many scenarios.}
+
+\begin{figure}[!htbp]
+	\begin{centering}
+		\includegraphics[width = .6\textwidth]{pic/package_feature.pdf}
+		\caption{Package Feature Step}
+		\label{fig:package_feature}
+	\end{centering}
+\end{figure}
 
 The package feature host tool receives the car ID and the feature number as flags, and is able to read the host secrets.
 \begin{itemize}
