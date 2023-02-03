@@ -61,7 +61,7 @@ uint32_t send_board_message(MESSAGE_PACKET *message);
  * @param message pointer to message where data will be received
  * @return uint32_t the number of bytes received
  */
-uint32_t receive_board_message(MESSAGE_PACKET *message);
+uint32_t receive_board_message(MESSAGE_PACKET *message, uint8_t buffer_size);
 
 /**
  * @brief Function that retreives messages until the specified message is found
@@ -70,6 +70,6 @@ uint32_t receive_board_message(MESSAGE_PACKET *message);
  * @param type the type of message to receive
  * @return uint32_t the number of bytes received
  */
-uint32_t receive_board_message_by_type(MESSAGE_PACKET *message, uint8_t type);
+uint32_t receive_board_message_by_type(MESSAGE_PACKET *message, uint8_t buffer_size, uint8_t type);
 
 #endif

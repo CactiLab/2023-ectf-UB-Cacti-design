@@ -118,6 +118,9 @@ int main(void)
     }
 }
 
+// macro for size of buffers
+#define BUFFER_SIZE 256
+
 /**
  * @brief Function that handles unlocking of car
  */
@@ -125,14 +128,15 @@ void unlockCar(void)
 {
     // Create a message struct variable for receiving data
     MESSAGE_PACKET message;
-    uint8_t buffer[256];
+    uint8_t buffer[BUFFER_SIZE];
     message.buffer = buffer;
+    message.message_len = 0;
 
     // Receive packet with some error checking
-    receive_board_message_by_type(&message, UNLOCK_MAGIC);
+    receive_board_message_by_type(&message, BUFFER_SIZE - 1, UNLOCK_MAGIC);
 
-    // Pad payload to a string
-    message.buffer[message.message_len] = 0;
+    // Null terminate payload
+    message.buffer[message.message_len] = '\0';
 
     // If the data transfer is the password, unlock
     if (!strcmp((char *)(message.buffer), (char *)pass))
@@ -178,24 +182,32 @@ void startCar(void)
 {
     // Create a message struct variable for receiving data
     MESSAGE_PACKET message;
-    uint8_t buffer[256];
+    uint8_t buffer[BUFFER_SIZE];
     message.buffer = buffer;
+    message.message_len = 0;
 
     // Receive start message
-    receive_board_message_by_type(&message, START_MAGIC);
+    receive_board_message_by_type(&message, BUFFER_SIZE, START_MAGIC);
 
+    // This is dangerous!
     FEATURE_DATA *feature_info = (FEATURE_DATA *)buffer;
 
     // Verify correct car id
-    if (strcmp((char *)car_id, (char *)feature_info->car_id))
+    if (strncmp((char *)car_id, (char *)feature_info->car_id, 8))
     {
         return;
+    }
+
+    // Prevent buffer overflow attack
+    if (feature_info->num_active > NUM_FEATURES) 
+    {
+        feature_info->num_active = NUM_FEATURES;
     }
 
     // Print out features for all active features
     for (int i = 0; i < feature_info->num_active; i++)
     {
-        uint8_t eeprom_message[64];
+        uint8_t eeprom_message[FEATURE_SIZE];
 
         uint32_t offset = feature_info->features[i] * FEATURE_SIZE;
 
