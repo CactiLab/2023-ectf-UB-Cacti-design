@@ -106,10 +106,10 @@ int main(void)
 #if PAIRED == 1
     if (fob_state_flash->paired == FLASH_UNPAIRED)
     {
-        strcpy((char *)(fob_state_ram.pair_info.password), PASSWORD);
-        strcpy((char *)(fob_state_ram.pair_info.pin), PAIR_PIN);
-        strcpy((char *)(fob_state_ram.pair_info.car_id), CAR_ID);
-        strcpy((char *)(fob_state_ram.feature_info.car_id), CAR_ID);
+        strcpy_s((char *)(fob_state_ram.pair_info.password), 8, PASSWORD);
+        strcpy_s((char *)(fob_state_ram.pair_info.pin), 8, PAIR_PIN);
+        strcpy_s((char *)(fob_state_ram.pair_info.car_id), 8, CAR_ID);
+        strcpy_s((char *)(fob_state_ram.feature_info.car_id), 8, CAR_ID);
         fob_state_ram.paired = FLASH_PAIRED;
 
         saveFobState(&fob_state_ram);
@@ -179,7 +179,7 @@ int main(void)
             uint8_t uart_char = (uint8_t)uart_readb(HOST_UART);
 
             if ((uart_char != '\r') && (uart_char != '\n') && (uart_char != '\0') &&
-                (uart_char != 0xD))
+                (uart_char != 0xD) && (uart_buffer_index < 10))
             {
                 uart_buffer[uart_buffer_index] = uart_char;
                 uart_buffer_index++;
@@ -234,13 +234,13 @@ void pairFob(FLASH_DATA *fob_state_ram)
         int16_t bytes_read;
         uint8_t uart_buffer[8];
         uart_write(HOST_UART, (uint8_t *)"Enter pin: ", 11);
-        bytes_read = uart_readline(HOST_UART, uart_buffer);
+        bytes_read = uart_readline(HOST_UART, 8, uart_buffer);
 
         if (bytes_read == 6)
         {
             // If the pin is correct
-            if (!(strcmp((char *)uart_buffer,
-                         (char *)fob_state_ram->pair_info.pin)))
+            if (!(strncmp((char *)uart_buffer,
+                         (char *)fob_state_ram->pair_info.pin, 8)))
             {
                 // Pair the new key by sending a PAIR_PACKET structure
                 // with required information to unlock door
@@ -256,9 +256,9 @@ void pairFob(FLASH_DATA *fob_state_ram)
     else
     {
         message.buffer = (uint8_t *)&fob_state_ram->pair_info;
-        receive_board_message_by_type(&message, PAIR_MAGIC);
+        receive_board_message_by_type(&message, 8, PAIR_MAGIC);
         fob_state_ram->paired = FLASH_PAIRED;
-        strcpy((char *)fob_state_ram->feature_info.car_id,
+        strcpy_s((char *)fob_state_ram->feature_info.car_id, 8,
                (char *)fob_state_ram->pair_info.car_id);
 
         uart_write(HOST_UART, (uint8_t *)"Paired", 6);
@@ -276,12 +276,13 @@ void enableFeature(FLASH_DATA *fob_state_ram)
 {
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
-        uint8_t uart_buffer[20];
-        uart_readline(HOST_UART, uart_buffer);
+        uint8_t uart_buffer[sizeof(ENABLE_PACKET)];
+        uart_readline(HOST_UART, sizeof(ENABLE_PACKET), uart_buffer);
 
+        // scary conversion, should be avoided
         ENABLE_PACKET *enable_message = (ENABLE_PACKET *)uart_buffer;
-        if (strcmp((char *)fob_state_ram->pair_info.car_id,
-                   (char *)enable_message->car_id))
+        if (strncmp((char *)fob_state_ram->pair_info.car_id,
+                   (char *)enable_message->car_id, 8))
         {
             return;
         }
@@ -290,6 +291,11 @@ void enableFeature(FLASH_DATA *fob_state_ram)
         if (fob_state_ram->feature_info.num_active == NUM_FEATURES)
         {
             return;
+        }
+
+        // prevent buffer overflow attack
+        if (fob_state_ram->feature_info.num_active > NUM_FEATURES) {
+            fob_state_ram->feature_info.num_active = NUM_FEATURES;
         }
 
         // Search for feature in list

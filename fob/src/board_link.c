@@ -77,7 +77,7 @@ uint32_t send_board_message(MESSAGE_PACKET *message)
  * @param message pointer to message where data will be received
  * @return uint32_t the number of bytes received - 0 for error
  */
-uint32_t receive_board_message(MESSAGE_PACKET *message)
+uint32_t receive_board_message(MESSAGE_PACKET *message, uint8_t buffer_size)
 {
     message->magic = (uint8_t)UARTCharGet(BOARD_UART);
 
@@ -87,6 +87,11 @@ uint32_t receive_board_message(MESSAGE_PACKET *message)
     }
 
     message->message_len = (uint8_t)UARTCharGet(BOARD_UART);
+    
+    // attempted buffer overflow attack, handle by discarding extra bytes
+    if (message->message_len > buffer_size) {
+        message->message_len = buffer_size;
+    }
 
     for (int i = 0; i < message->message_len; i++)
     {
@@ -103,11 +108,11 @@ uint32_t receive_board_message(MESSAGE_PACKET *message)
  * @param type the type of message to receive
  * @return uint32_t the number of bytes received
  */
-uint32_t receive_board_message_by_type(MESSAGE_PACKET *message, uint8_t type)
+uint32_t receive_board_message_by_type(MESSAGE_PACKET *message, size_t buffer_size, uint8_t type)
 {
     do
     {
-        receive_board_message(message);
+        receive_board_message(message, buffer_size);
     } while (message->magic != type);
 
     return message->message_len;
