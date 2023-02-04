@@ -173,7 +173,7 @@ Our host tools are written in Python, thus this step will simply copy all the to
 
 \textit{Attackers will NEVER be given access to the Host Secrets generated in this step.}
 
-In our design, the Host Secrets contain two parts: the Global Secret and the Car Secrets, and they will be saved in the \textit{secrets} docker volume.
+In our design, the Host Secrets contain two parts: the Global Secrets and the Car Secrets, and they will be saved in the \textit{secrets} docker volume.
 
 \begin{figure}[!htbp]
 	\begin{centering}
@@ -183,12 +183,17 @@ In our design, the Host Secrets contain two parts: the Global Secret and the Car
 	\end{centering}
 \end{figure}
 
-This step will generate the Global Secret, which is a deployment-wide secret shared across cars and/or fobs.
-The Global Secret is a pair of asymmetric encryption keys which contains a private key and a public key.
-The private key is used to package the feature and will never get loaded to any of the car/fob devices.
-The public key is used to authenticate the packaged feature and will get loaded to the paired fob.
+This step will generate the Global Secrets, a deployment-wide secret shared across cars and fobs.
+The Global Secrets have two pairs of asymmetric encryption keys.
+The first pair is used for encrypting the packaged feature and authenticating it.
+The \verb|E_Key_1| is used for packaging the feature and will never get loaded to any car/fob devices.
+The \verb|D_Key_1| is used to authenticate the packaged feature and will get loaded to the fob devices.
+The second pair is used for encrypting and authenticating the pairing info package send from the paired fob to the unpaired fob, which is to prevent the information leakage from the pairing info package.
+The \verb|E_Key_2| is used for encrypting the pairing info package and will be loaded to the paired fob devices.
+The \verb|D_Key_2| is used for encrypting the pairing info package and will be loaded to the unpaired fob devices.
+After an unpaired fob gets paired, the saved \verb|D_Key_2| will be erased.
 
-We generate the Global Secret randomly, to prevent the attacker from retrieving it through reverse engineering.
+We generate the Global Secrets randomly, to prevent the attacker from retrieving it through the source code.
 
 \subsubsection{Build Car, Paired Fob, and Unpaired Fob}
 
@@ -206,23 +211,23 @@ We generate the Global Secret randomly, to prevent the attacker from retrieving 
 
 To build the car binaries, a car ID will be supplied as a flag to the building tools. We will:
 \begin{itemize}
-	\item Check whether the car secret that corresponding to this car ID exists in the \textit{secrets} docker volume.
+	\item Check whether the car secret that corresponding to this car ID (\verb|AES_Key:CarID|) exists in the \textit{secrets} docker volume.
 	\item If it not exists, we randomly generate one, and save it into the \textit{secrets} docker volume.
-	\item This car secret will get loaded into the car EEPROM data. The car ID will be saved in the car firmware.
+	\item This \verb|AES_Key:CarID| will get loaded into the car EEPROM data. The car ID will be saved in the car firmware.
 \end{itemize}
 
 To build the paired fob binaries, a car ID (corresponding to this fob) and a fob pairing PIN will be supplied as a flag to the building tools. We will:
 \begin{itemize}
-	\item Retrieve the car secret which corresponding to this car ID from the \textit{secrets} docker volume.
-	\item Retrieve the public key from the \textit{secrets} docker volume.
-	\item Encrypt the fob pairing PIN with the car secret.
-	\item Save the car secret and public key into the paired fob EEPROM data. Save the car ID and encrypted fob pairing PIN in the paired fob firmware.
+	\item Retrieve the car secret which corresponding to this car ID (\verb|AES_Key:CarID|) from the \textit{secrets} docker volume.
+	\item Retrieve the \verb|D_Key_1| and \verb|E_Key_2| from the \textit{secrets} docker volume.
+	\item Encrypt the fob pairing PIN with the \verb|AES_Key:CarID|.
+	\item Save the \verb|AES_Key:CarID|, \verb|D_Key_1|, and \verb|E_Key_2| into the paired fob EEPROM data. Save the car ID and encrypted fob pairing PIN in the paired fob firmware.
 \end{itemize}
 
 To build the unpaired fob binaries, we will:
 \begin{itemize}
-	\item Retrieve the public key from the \textit{secrets} docker volume.
-	\item Save the public key into the paired fob EEPROM data.
+	\item Retrieve the \verb|D_Key_1| and \verb|D_Key_2| from the \textit{secrets} docker volume.
+	\item Save the the \verb|D_Key_1| and \verb|D_Key_2| into the paired fob EEPROM data.
 \end{itemize}
 
 \subsection{Load Devices}
@@ -248,10 +253,11 @@ After building the system, the firmware and EEPROM contents are loaded onto the 
 The package feature host tool receives the car ID and the feature number as flags, and is able to read the host secrets.
 \begin{itemize}
 	\item Pack the the car ID, feature number and some control padding together.
-	\item Encrypt the package using the private key.
+	\item Retrieve the \verb|E_Key_1| from the \textit{secrets} docker volume.
+	\item Encrypt the package using the \verb|E_Key_1|.
 \end{itemize}
 
-The resulting packaged feature is encrypted by the private key.
+The resulting packaged feature is encrypted by the \verb|E_Key_1|, and this key will never be stored outside of the \textit{secrets} docker volume.
 
 \subsubsection{Pair Fob}
 
@@ -268,27 +274,28 @@ The following describe the sequence of pairing an unpaired key fob. It requires 
 \end{figure}
 
 \begin{enumerate}
-	\item The host tool starts the connection to both the paired and unpaired fob's UART0 sockets for serial transaction.
+	\item The host tool starts the connection to both the paired and unpaired fob's UART0 for serial transaction.
 	\item The host tool sends the \textit{pair} command to both the paired and unpaired fob's sockets.
-	\item After the paired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pair PIN from the same UART0 socket.
-	\item After the unpaired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pairing info package from the UART1 socket which connects to the paired fob.
-	\item The host tool sends the pairing PIN to the paired fob's UART0 socket.
-	\item The paired fob receives the pairing PIN and encrypt it using the car secret. Then it checks the encryption result with the saved encrypted pairing PIN. If it matches, the paired fob will send the pairing info package to the UART1 socket. If it does not match, the paired fob will lockout for 3 seconds before resuming to listen to the UART messages.
-	\item If the unpaired fob receives the pairing info package through the UART1 socket which connects to the paired fob, it will process the received package and use the info inside to register it as a paired fob.
+	\item After the paired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pair PIN from the same UART0.
+	\item After the unpaired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pairing info package from the UART1 which connects to the paired fob.
+	\item The host tool sends the pairing PIN to the paired fob's UART0.
+	\item The paired fob receives the pairing PIN and encrypt it using the \verb|AES_Key:CarID|. Then it checks the encryption result with the saved encrypted pairing PIN. If it matches, the paired fob will pack and encrypt the pairing info package with the \verb|E_Key_2|, and send it to the UART1. If it does not match, the paired fob will lockout for 5 seconds before resuming to listen to the UART messages.
+	\item If the unpaired fob receives the pairing info package through the UART1 socket which connects to the paired fob, it will decrypt it with the \verb|D_Key_2| and use the info inside to register it as a paired fob.
 	\item The unpaired fob (now it's paired) sends the pairing successful message to the UART0 to the host tool.
 \end{enumerate}
 
 Notes:
 \begin{itemize}
-	\item If the pairing PIN check in the paired fob fails, the paired fob will enter the lockout mode which blocks all the UART communication for 3 seconds. This is to prevent the brute force cracking of the pairing PIN.
-	\item The pairing info package contains the car ID, the car secret and the encrypted pairing PIN.
+	\item If the pairing PIN check in the paired fob fails, the paired fob will enter the lockout mode which blocks all the UART communication for 5 seconds. This is to prevent the brute force cracking of the pairing PIN.
+	\item The pairing info package contains the car ID, the \verb|AES_Key:CarID|, the \verb|E_Key_2|, and the encrypted pairing PIN.
+	\item After the unpaired fob registers it as a paired fob, the saved \verb|D_Key_2| will be erased.
 \end{itemize}
 
 \subsubsection{Enable Feature}
 
 \textit{This tool will not have access to Host Secrets.}
 
-The following describe the sequence of enabling a feature on a paired key fob. It requires the host tool, a paired fob device and the packaged feature. The paired fob is connected to the host computer through the UART0.
+The following describe the sequence of enabling a feature on a paired key fob. It requires the host tool, a paired fob device and the packaged feature file. The paired fob is connected to the host computer through the UART0.
 
 \begin{figure}[!htbp]
 	\begin{centering}
@@ -299,17 +306,17 @@ The following describe the sequence of enabling a feature on a paired key fob. I
 \end{figure}
 
 \begin{enumerate}
-	\item The host tool starts the connection to the paired fob's UART0 sockets for serial transaction.
-	\item The host tool sends the \textit{enable} command to the paired fob's socket.
-	\item After the paired fob receives the \textit{enable} command, it will enter the state to waiting for receiving the packaged feature from the same UART0 socket.
-	\item The host tool opens and sends the content of the packaged feature to the paired fob's socket.
-	\item The paired fob receives and decrypts the package. If 1) the car ID in package matches the saved car ID, 2) the enabled feature list is not full, and 3) this feature has not been  enabled previously, the paired fob will enable this feature and save the new feature list.
+	\item The host tool starts the connection to the paired fob's UART0 for serial transaction.
+	\item The host tool sends the \textit{enable} command to the paired fob's UART0.
+	\item After the paired fob receives the \textit{enable} command, it will enter the state to waiting for receiving the packaged feature from the same UART0.
+	\item The host tool opens and sends the content of the packaged feature to the paired fob's UART0.
+	\item The paired fob receives and decrypts the package with the \verb|D_Key_1|. If 1) the car ID in package matches the saved car ID, 2) the enabled feature list is not full, and 3) this feature has not been enabled previously, the paired fob will enable this feature and save the new feature list.
 	\item The paired fob sends the enable successful message to the UART0 to the host tool.
 \end{enumerate}
 
 Notes:
 \begin{itemize}
-	\item The paired fob uses the public key to decrypt the received package.
+	\item The paired fob uses the \verb|D_Key_1| to decrypt the received package.
 \end{itemize}
 
 \subsubsection{Unlock and Start Car}
@@ -328,11 +335,11 @@ The following describe the sequence of unlocking the car with a paired fob. It r
 
 \begin{enumerate}
 	\item The user press the SW1 button on the paired fob.
-	\item The paired fob sends the \textit{unlock} command to the UART1 socket, and enter the state to waiting for receiving a respond from the same UART1 socket.
-	\item After the car receives the \textit{unlock} command, it will generate a random number. Then this random number gets encrypted by the saved car secret. The result of this encryption is called \textit{challenge}.
-	\item The car sends the \textit{challenge} package to the the UART1 socket, and enter the state to waiting for receiving a respond from the same UART1 socket.
-	\item The paired fob receives the \textit{challenge} package and decrypt it using the saved car secret. The decrypted package (number) is called \textit{answer}. Then the paired fob sends this \textit{answer} package back to the UART1 socket.
-	\item The car receives the \textit{answer} package and verify if it matches the previous generated random number. If it matches, the car will send the unlock message to the UART0 socket, and start the car (send the enabled feature list to the UART0 socket).
+	\item The paired fob sends the \textit{unlock} command to the UART1, and enter the state to waiting for receiving a respond from the same UART1 socket.
+	\item After the car receives the \textit{unlock} command, it will generate a random number. Then this random number gets encrypted by the saved \verb|AES_Key:CarID|. The result of this encryption is called \textit{challenge}.
+	\item The car sends the \textit{challenge} package to the the UART1, and enter the state to waiting for receiving a respond from the same UART1.
+	\item The paired fob receives the \textit{challenge} package and decrypt it using the saved \verb|AES_Key:CarID|. The decrypted message is called \textit{answer}. Then the paired fob encrypt the feature list with the \verb|AES_Key:CarID|, and combine the \textit{answer} message with the encrypted feature list to a package, and send it to the UART1 to the car.
+	\item The car receives the combined package and verify if the \textit{answer} message matches the previous generated random number. If it matches, the car will decrypt the feature list with the \verb|AES_Key:CarID|. If the decryption is successful, it will send the unlock secret as well as the matched feature secret(s) to the UART0 socket to the host computer.
 \end{enumerate}
 
 \end{document}
