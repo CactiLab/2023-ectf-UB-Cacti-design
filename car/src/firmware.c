@@ -31,6 +31,7 @@
 #include "board_link.h"
 #include "feature_list.h"
 #include "uart.h"
+#include "syscalls.h"
 
 /*** Structure definitions ***/
 // Structure of start_car packet FEATURE_DATA

@@ -32,6 +32,9 @@
 #include "board_link.h"
 #include "feature_list.h"
 #include "uart.h"
+#include "syscalls.h"
+
+#include "mbedtls/entropy.h"
 
 // this will run if EXAMPLE_AES is defined in the Makefile (see line 54)
 #ifdef EXAMPLE_AES
@@ -130,6 +133,9 @@ int main(void)
 
     // Initialize UART
     uart_init();
+
+    mbedtls_entropy_context entropy;
+    mbedtls_entropy_init( &entropy );
 
 #ifdef EXAMPLE_AES
     // -------------------------------------------------------------------------
