@@ -79,4 +79,10 @@ SECTIONS
         . += _STACK_SIZE;
         _stack_top = .;
     } > SRAM
+
+    /DISCARD/ :
+    {
+        *(.ARM.exidx*)
+        *(.gnu.linkonce.armexidx.*)
+    }
 }

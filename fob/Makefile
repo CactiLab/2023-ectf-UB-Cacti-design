@@ -18,6 +18,7 @@ DEBUG=1
 
 # additional base directories
 TIVA_ROOT=${ROOT}/lib/tivaware
+LIBMBEDTLS_ROOT=${ROOT}/lib/libmbedtls
 
 # add additional directories to search for source files to VPATH
 VPATH=${ROOT}/src
@@ -26,6 +27,7 @@ VPATH+=${TIVA_ROOT}
 # add additional directories to search for header files to IPATH
 IPATH=${ROOT}/inc
 IPATH+=${TIVA_ROOT}
+IPATH+=${LIBMBEDTLS_ROOT}/include
 
 # Include common makedefs
 include ${TIVA_ROOT}/makedefs
@@ -111,6 +113,11 @@ ${COMPILER}/firmware.axf: ${COMPILER}/aes.o
 endif
 ################ end crypto example ################
 
+build_mbedtls:
+	@python3 -m pip install -r ${MBEDTLS_ROOT}/scripts/basic.requirements.txt
+	@mkdir -p ${ROOT}/lib/mbedtls_build && cd ${ROOT}/lib/mbedtls_build
+	@cmake -DCMAKE_C_COMPILER_WORKS=1 -DCMAKE_BUILD_TYPE=Release -DUSE_SHARED_MBEDTLS_LIBRARY=OFF -DUSE_STATIC_MBEDTLS_LIBRARY=ON -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_TOOLCHAIN_FILE=${ROOT}/lib/toolchain.cmake ${MBEDTLS_ROOT}
+	@make all install
 
 # build libraries
 ${TIVA_ROOT}/driverlib/${COMPILER}/libdriver.a:
@@ -137,6 +144,10 @@ ${COMPILER}/firmware.axf: ${COMPILER}/uart.o
 ${COMPILER}/firmware.axf: ${COMPILER}/board_link.o
 ${COMPILER}/firmware.axf: ${COMPILER}/firmware.o
 ${COMPILER}/firmware.axf: ${COMPILER}/startup_${COMPILER}.o
+${COMPILER}/firmware.axf: ${LIBMBEDTLS_ROOT}/lib/libmbedtls.a
+${COMPILER}/firmware.axf: ${LIBMBEDTLS_ROOT}/lib/libmbedcrypto.a
+${COMPILER}/firmware.axf: ${LIBMBEDTLS_ROOT}/lib/libmbedx509.a
+
 ${COMPILER}/firmware.axf: ${TIVA_ROOT}/driverlib/${COMPILER}/libdriver.a
 
 copy_artifacts:
@@ -146,6 +157,7 @@ copy_artifacts:
 
 SCATTERgcc_firmware=${TIVA_ROOT}/firmware.ld
 ENTRY_firmware=Firmware_Startup
+VERBOSE=1
 
 # Include the automatically generated dependency files.
 ifneq (${MAKECMDGOALS},clean)
