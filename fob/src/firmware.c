@@ -33,12 +33,7 @@
 #include "feature_list.h"
 #include "uart.h"
 #include "syscalls.h"
-
-#include "mbedtls/entropy.h"
-#include "mbedtls/build_info.h"
-#include "mbedtls/ctr_drbg.h"
-
-#include "mbedtls/platform.h"
+#include "constant.h"
 
 // this will run if EXAMPLE_AES is defined in the Makefile (see line 54)
 #ifdef EXAMPLE_AES
@@ -134,38 +129,33 @@ int main(void)
         fob_state_ram.feature_info.num_active = 0;
         saveFobState(&fob_state_ram);
     }
-    
+
     // Initialize UART
     uart_init();
 
-    int i, k, ret = 1;
+#ifdef ENBALE_DRBG
+    // -------------------------------------------------------------------------
+    // set the environment for random number genreation
+    // -------------------------------------------------------------------------
+    dwt_init();
+
+    // test_random_generator
+    // random_twice_with_ctr_drbg();
+    // end_test
     mbedtls_entropy_context entropy;
-    mbedtls_entropy_init( &entropy );
-    mbedtls_ctr_drbg_context ctr_drbg;
-    char *personalization = "my_app_specific_string";
-    mbedtls_ctr_drbg_init( &ctr_drbg );
-
-    unsigned char buf[1024];
-
-    ret = mbedtls_ctr_drbg_seed(&ctr_drbg,
-                                mbedtls_entropy_func,
-                                &entropy,
-                                (const unsigned char *) personalization,
-                                strlen( personalization ));
-    if (ret != 0) {
-        while (1) {}
-    }
-    mbedtls_ctr_drbg_set_prediction_resistance(&ctr_drbg, MBEDTLS_CTR_DRBG_PR_OFF);
-
-    for (i = 0, k = 768; i < k; i++) {
-        ret = mbedtls_ctr_drbg_random(&ctr_drbg, buf, sizeof(buf));
-        if (ret != 0) {
-            while (1) {}
-        }
+    mbedtls_ctr_drbg_context drbg;
+    unsigned char challenge[OUTPUT_SIZE] = {0};
+    unsigned char tmp[OUTPUT_SIZE] = {0};
+    // init objects
+    random_init(&drbg, &entropy);
+    // random_enerator
+    random_gnereator(&drbg, &entropy, MBEDTLS_CTR_DRBG_KEYSIZE, MBEDTLS_CTR_DRBG_KEYSIZE / 2, &challenge, OUTPUT_SIZE);
+    if (memcmp(challenge, tmp, OUTPUT_SIZE) != 0)
+    {
+        dummy_handler();
     }
 
-    mbedtls_ctr_drbg_free(&ctr_drbg);
-    mbedtls_entropy_free(&entropy);
+#endif
 
 #ifdef EXAMPLE_AES
     // -------------------------------------------------------------------------

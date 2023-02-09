@@ -119,6 +119,7 @@ ${COMPILER}:
 ${COMPILER}/firmware.axf: ${COMPILER}/uart.o
 ${COMPILER}/firmware.axf: ${COMPILER}/board_link.o
 ${COMPILER}/firmware.axf: ${COMPILER}/firmware.o
+${COMPILER}/firmware.axf: ${COMPILER}/utility.o
 ${COMPILER}/firmware.axf: ${COMPILER}/startup_${COMPILER}.o
 ${COMPILER}/firmware.axf: ${LIBMBEDTLS_ROOT}/lib/libmbedtls.a
 ${COMPILER}/firmware.axf: ${LIBMBEDTLS_ROOT}/lib/libmbedcrypto.a

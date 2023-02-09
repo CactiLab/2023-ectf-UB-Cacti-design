@@ -32,6 +32,7 @@
 #include "feature_list.h"
 #include "uart.h"
 #include "syscalls.h"
+#include "constant.h"
 
 /*** Structure definitions ***/
 // Structure of start_car packet FEATURE_DATA
@@ -108,6 +109,30 @@ int main(void)
 
     // Initialize UART peripheral
     uart_init();
+
+#ifdef ENBALE_DRBG
+    // -------------------------------------------------------------------------
+    // set the environment for random number genreation
+    // -------------------------------------------------------------------------
+    dwt_init();
+
+    // test_random_generator
+    // random_twice_with_ctr_drbg();
+    // end_test
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context drbg;
+    unsigned char challenge[OUTPUT_SIZE] = {0};
+    unsigned char tmp[OUTPUT_SIZE] = {0};
+    // init objects
+    random_init(&drbg, &entropy);
+    // random_enerator
+    random_gnereator(&drbg, &entropy, MBEDTLS_CTR_DRBG_KEYSIZE, MBEDTLS_CTR_DRBG_KEYSIZE / 2, &challenge, OUTPUT_SIZE);
+    if (memcmp(challenge, tmp, OUTPUT_SIZE) != 0)
+    {
+        dummy_handler();
+    }
+
+#endif    
 
     // Initialize board link UART
     setup_board_link();
