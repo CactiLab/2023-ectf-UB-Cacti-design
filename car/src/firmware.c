@@ -110,6 +110,11 @@ int main(void)
     // Initialize UART peripheral
     uart_init();
 
+#ifdef ENABLE_MPU
+    // Init the MPU
+    mpu_init();
+#endif
+
 #ifdef ENBALE_DRBG
     // -------------------------------------------------------------------------
     // set the environment for random number genreation

@@ -133,6 +133,11 @@ int main(void)
     // Initialize UART
     uart_init();
 
+#ifdef ENABLE_MPU
+    // Initizalize MPU
+    mpu_init();
+#endif
+
 #ifdef ENBALE_DRBG
     // -------------------------------------------------------------------------
     // set the environment for random number genreation

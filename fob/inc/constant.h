@@ -12,6 +12,7 @@
 
 #define OUTPUT_SIZE 32
 // #define ENBALE_DRBG
+// #define ENABLE_MPU
 
 #define DWT_TRACE_ENABLE 0x40000001
 #define ARM_CM_DEMCR (*(uint32_t *)0xE000EDFC)
@@ -31,5 +32,7 @@ void random_gnereator(  mbedtls_ctr_drbg_context *drbg,
                         size_t nonce_len,
                         unsigned char *output,
                         size_t output_size);
+
+void mpu_init();
 
 #endif // CONSTANT_H
