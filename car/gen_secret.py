@@ -37,21 +37,21 @@ def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--car-id", type=int, required=True)
-    parser.add_argument("--priv-key-file", type=Path, required=True)
-    parser.add_argument("--pub-key-file", type=Path, required=True)
+    parser.add_argument("--unlock-priv-file", type=Path, required=True)
+    parser.add_argument("--unlock-pub-file", type=Path, required=True)
     parser.add_argument("--header-file", type=Path, required=True)
     parser.add_argument("--eeprom-file", type=Path, required=True)
     args = parser.parse_args()
 
     # Generate a new RSA key pair if one doesn't exist
-    if not args.pub_key_file.exists():
-        generate_rsa_key_pair(512, args.pub_key_file, args.priv_key_file)
+    if not args.unlock_pub_file.exists():
+        generate_rsa_key_pair(512, args.unlock_pub_file, args.unlock_priv_file)
 
-    pub_key_data = args.pub_key_file.read_bytes()
-    priv_key_data = args.priv_key_file.read_bytes()
+    pub_key_data = args.unlock_pub_file.read_bytes()
+    # priv_key_data = args.priv_key_file.read_bytes()
     
     pub_key_size = len(pub_key_data)
-    priv_key_size = len(priv_key_data)
+    # priv_key_size = len(priv_key_data)
     
     # Pad the public key to the size of the EEPROM unlock public key
     image_pub_key_data = pub_key_data.ljust(EEPROM_UNLOCK_PUB_SIZE, b'\xff')
@@ -63,7 +63,8 @@ def main():
     with open(args.header_file, "w") as fp:
         fp.write("#ifndef __CAR_SECRETS__\n")
         fp.write("#define __CAR_SECRETS__\n\n")
-        fp.write(f"#define CAR_PUB_KEY_SIZE {pub_key_size}\n\n")
+        fp.write(f"#define UNLOCK_PUB_KEY_SIZE {pub_key_size}\n\n")
+        fp.write(f"#define UNLOCK_EEPROM_PUB_KEY_LOC 0x0\n\n")
         fp.write(f'#define CAR_ID "{args.car_id}"\n\n')
         fp.write('#define PASSWORD "unlock"\n\n')
         fp.write("#endif\n")
