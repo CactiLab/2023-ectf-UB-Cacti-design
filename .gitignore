@@ -8,3 +8,4 @@
 docs/SystemDesign.pdf
 mbedtls_build/
 fob/lib/mbedtls
+test

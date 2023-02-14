@@ -9,3 +9,5 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     cmake \
     binutils-arm-none-eabi \
     gcc-arm-none-eabi
+
+RUN pip3 install python-mbedtls

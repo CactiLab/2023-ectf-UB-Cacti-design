@@ -19,3 +19,4 @@ __check_defined = \
 all:
 	$(call check_defined SECRETS_DIR)
 	echo "SECRET!" > ${SECRETS_DIR}/global_secrets.txt
+	python3 depl_key_gen.py ${SECRETS_DIR}
