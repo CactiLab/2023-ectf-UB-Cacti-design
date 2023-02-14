@@ -52,7 +52,7 @@ car_arg_check:
 	$(call check_defined, CAR_ID SECRETS_DIR BIN_PATH ELF_PATH EEPROM_PATH)
 
 gen_secret:
-	python3 gen_secret.py --car-id ${CAR_ID} --priv-key-file ${SECRETS_DIR}/unlock_priv_${CAR_ID}.der --pub-key-file ${SECRETS_DIR}/unlock_pub_${CAR_ID}.der --header-file inc/secrets.h --eeprom-file ${EEPROM_PATH}
+	python3 gen_secret.py --car-id ${CAR_ID} --unlock-priv-file ${SECRETS_DIR}/unlock_priv_${CAR_ID}.der --unlock-pub-file ${SECRETS_DIR}/unlock_pub_${CAR_ID}.der --header-file inc/secrets.h --eeprom-file ${EEPROM_PATH}
 
 ################ END car customization ################
 #######################################################

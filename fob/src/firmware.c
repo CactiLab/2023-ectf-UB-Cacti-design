@@ -80,6 +80,13 @@ typedef struct
     FEATURE_DATA feature_info;
 } FLASH_DATA;
 
+/*** Macro Definitions ***/
+// Definitions for unlock message location in EEPROM
+#define FEATURE_EEPROM_PUB_KEY_LOC 0x0
+#define PAIRING_EEPROM_PUB_KEY_LOC 0x60
+#define UNLOCK_EEPROM_PRIV_KEY_LOC 0xC0
+#define PAIRING_EEPROM_PRIV_KEY_LOC 0xC0
+
 /*** Function definitions ***/
 // Core functions - all functionality supported by fob
 void saveFobState(FLASH_DATA *flash_data);

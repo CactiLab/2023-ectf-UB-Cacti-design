@@ -22,6 +22,11 @@ EEPROM_PAIRING_PUB_SIZE = 96
 EEPROM_UNLOCK_PRIV_SIZE = 320
 EEPROM_PAIRING_PRIV_SIZE = 320
 
+EEPROM_FEATURE_PUB_LOC = 0x0
+EEPROM_PAIRING_PUB_LOC = 0x60
+EEPROM_UNLOCK_PRIV_LOC = 0xc0
+EEPROM_PAIRING_PRIV_LOC = 0xc0
+
 def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
     # Create a new RSA context
     rsa = pk.RSA()
@@ -47,6 +52,7 @@ def main():
     parser.add_argument("--unlock-priv-file", type=Path)
     parser.add_argument("--pairing-priv-file", type=Path)
     parser.add_argument("--header-file", type=Path)
+    parser.add_argument("--eeprom-file", type=Path, required=True)
     parser.add_argument("--paired", action="store_true")
     args = parser.parse_args()
 
@@ -58,11 +64,15 @@ def main():
     
     image_feature_pub_key_data = feature_pub_key_data.ljust(EEPROM_FEATURE_PUB_SIZE, b'\xff')
     image_pairing_pub_key_data = pairing_pub_key_data.ljust(EEPROM_PAIRING_PUB_SIZE, b'\xff')
+    
+    eeprom_data = image_feature_pub_key_data + image_pairing_pub_key_data
 
     if args.paired:
         unlock_priv_key_data = args.unlock_priv_file.read_bytes()
         unlock_priv_key_size = len(unlock_priv_key_data)
         image_unlock_priv_key_data = unlock_priv_key_data.ljust(EEPROM_UNLOCK_PRIV_SIZE, b'\xff')
+        
+        eeprom_data += image_unlock_priv_key_data
 
         # Paired, write the secrets to the header file
         with open(args.header_file, "w") as fp:
@@ -71,13 +81,18 @@ def main():
             fp.write("#define PAIRED 1\n")
             fp.write(f'#define PAIR_PIN "{args.pair_pin}"\n')
             fp.write(f'#define CAR_ID "{args.car_id}"\n')
-            # fp.write(f'#define CAR_SECRET "{car_secret}"\n\n')
+            fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n\n")
+            fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")
+            fp.write(f"#define UNLOCK_PRIV_KEY_SIZE {unlock_priv_key_size}\n\n")
+            fp.write(f"#define PAIRING_PRIV_KEY_SIZE 0\n\n")
             fp.write('#define PASSWORD "unlock"\n\n')
             fp.write("#endif\n")
     else:
         pairing_priv_key_data = args.pairing_priv_file.read_bytes()
         pairing_priv_key_size = len(pairing_priv_key_data)
         image_pairing_priv_key_data = pairing_priv_key_data.ljust(EEPROM_PAIRING_PRIV_SIZE, b'\xff')
+        
+        eeprom_data += image_pairing_priv_key_data
         
         # Unpaired, write default values to header file
         with open(args.header_file, "w") as fp:
@@ -86,10 +101,17 @@ def main():
             fp.write("#define PAIRED 0\n")
             fp.write('#define PAIR_PIN "000000"\n')
             fp.write('#define CAR_ID "000000"\n')
-            # fp.write('#define CAR_SECRET "000000"\n\n')
+            fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n\n")
+            fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")
+            fp.write(f"#define UNLOCK_PRIV_KEY_SIZE 0\n\n")
+            fp.write(f"#define PAIRING_PRIV_KEY_SIZE {pairing_priv_key_size}\n\n")
             fp.write('#define PASSWORD "unlock"\n\n')
             fp.write("#endif\n")
 
+    # Write the key data to the EEPROM file
+    args.eeprom_file.write_bytes(eeprom_data)
+    
+    
 
 if __name__ == "__main__":
     main()

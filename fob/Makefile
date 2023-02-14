@@ -53,14 +53,14 @@ paired_fob_arg_check:
 	$(call check_defined, CAR_ID PAIR_PIN SECRETS_DIR BIN_PATH ELF_PATH EEPROM_PATH)
 
 paired_fob_gen_secret:
-	python3 gen_secret.py --car-id ${CAR_ID} --pair-pin ${PAIR_PIN} --feature-pub-file ${SECRETS_DIR}/feature_pub.der --pairing-pub-file ${SECRETS_DIR}/pairing_pub.der --unlock-priv-file ${SECRETS_DIR}/unlock_priv_${CAR_ID}.der --header-file inc/secrets.h --paired
+	python3 gen_secret.py --car-id ${CAR_ID} --pair-pin ${PAIR_PIN} --feature-pub-file ${SECRETS_DIR}/feature_pub.der --pairing-pub-file ${SECRETS_DIR}/pairing_pub.der --unlock-priv-file ${SECRETS_DIR}/unlock_priv_${CAR_ID}.der --header-file inc/secrets.h --eeprom-file ${EEPROM_PATH} --paired
 
 
 unpaired_fob_arg_check:
 	$(call check_defined, SECRETS_DIR BIN_PATH ELF_PATH EEPROM_PATH)
 
 unpaired_fob_gen_secret:
-	python3 gen_secret.py --feature-pub-file ${SECRETS_DIR}/feature_pub.der --pairing-pub-file ${SECRETS_DIR}/pairing_pub.der --pairing-priv-file ${SECRETS_DIR}/pairing_priv.der --header-file inc/secrets.h
+	python3 gen_secret.py --feature-pub-file ${SECRETS_DIR}/feature_pub.der --pairing-pub-file ${SECRETS_DIR}/pairing_pub.der --pairing-priv-file ${SECRETS_DIR}/pairing_priv.der --header-file inc/secrets.h --eeprom-file ${EEPROM_PATH}
 
 
 ################ END fob customization ################
@@ -155,7 +155,7 @@ ${COMPILER}/firmware.axf: ${TIVA_ROOT}/driverlib/${COMPILER}/libdriver.a
 copy_artifacts:
 	cp ${COMPILER}/firmware.bin ${BIN_PATH}
 	cp ${COMPILER}/firmware.axf ${ELF_PATH}
-	cp ${SECRETS_DIR}/global_secrets.txt ${EEPROM_PATH}
+#	cp ${SECRETS_DIR}/global_secrets.txt ${EEPROM_PATH}
 
 SCATTERgcc_firmware=${TIVA_ROOT}/firmware.ld
 ENTRY_firmware=Firmware_Startup
