@@ -31,7 +31,7 @@ void mpu_init()
     executable: yes
     AP: read-only
     */
-    mpu_flag = MPU_RGN_SIZE_110K | MPU_RGN_PERM_EXEC | MPU_RGN_PERM_PRV_RO_USR_RO | MPU_RGN_ENABLE;
+    mpu_flag = MPU_RGN_SIZE_110K | MPU_RGN_PERM_EXEC | MPU_RGN_PERM_PRV_RW_USR_RW | MPU_RGN_ENABLE;
     MPURegionSet(0, 0x00008000, mpu_flag);
     MPURegionEnable(0);
 
