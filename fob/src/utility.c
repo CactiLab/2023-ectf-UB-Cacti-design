@@ -29,7 +29,7 @@ void dummy_handler()
    }
 }
 
-static int ctr_drbg_self_test_entropy(void *data, unsigned char *buf,
+int ctr_drbg_self_test_entropy(void *data, unsigned char *buf,
                                       size_t len)
 {
    const unsigned char *p = data;

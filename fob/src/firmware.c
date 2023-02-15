@@ -28,6 +28,7 @@
 #include "driverlib/timer.h"
 
 #include "secrets.h"
+#include "mbedtls/pk.h"
 
 #include "board_link.h"
 #include "feature_list.h"
@@ -39,6 +40,7 @@
 #ifdef EXAMPLE_AES
 #include "aes.h"
 #endif
+// #define PAIRED 1
 
 #define FOB_STATE_PTR 0x3FC00
 #define FLASH_DATA_SIZE           \
@@ -60,6 +62,7 @@ typedef struct
 typedef struct
 {
     uint8_t car_id[8];
+    uint16_t unlock_priv_key_size;
     uint8_t password[8];
     uint8_t pin[8];
 } PAIR_PACKET;
@@ -86,6 +89,9 @@ typedef struct
 #define PAIRING_EEPROM_PUB_KEY_LOC 0x60
 #define UNLOCK_EEPROM_PRIV_KEY_LOC 0xC0
 #define PAIRING_EEPROM_PRIV_KEY_LOC 0xC0
+
+#define UNLOCK_CMD "unlock"
+const char *pers = "fuzz_privkey";
 
 /*** Function definitions ***/
 // Core functions - all functionality supported by fob
@@ -120,6 +126,7 @@ int main(void)
         strcpy((char *)(fob_state_ram.pair_info.car_id), CAR_ID);
         strcpy((char *)(fob_state_ram.feature_info.car_id), CAR_ID);
         fob_state_ram.paired = FLASH_PAIRED;
+        fob_state_ram.pair_info.unlock_priv_key_size = UNLOCK_PRIV_KEY_SIZE;
 
         saveFobState(&fob_state_ram);
     }
@@ -137,8 +144,16 @@ int main(void)
         saveFobState(&fob_state_ram);
     }
 
+    // Ensure EEPROM peripheral is enabled
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
+    EEPROMInit();
+
     // Initialize UART
     uart_init();
+    // -------------------------------------------------------------------------
+    // set the environment for random number genreation
+    // -------------------------------------------------------------------------
+    dwt_init();
 
 #ifdef ENABLE_MPU
     // Initizalize MPU
@@ -146,11 +161,6 @@ int main(void)
 #endif
 
 #ifdef ENBALE_DRBG
-    // -------------------------------------------------------------------------
-    // set the environment for random number genreation
-    // -------------------------------------------------------------------------
-    dwt_init();
-
     // test_random_generator
     // random_twice_with_ctr_drbg();
     // end_test
@@ -356,6 +366,50 @@ void enableFeature(FLASH_DATA *fob_state_ram)
  */
 void unlockCar(FLASH_DATA *fob_state_ram)
 {
+    int ret = 0;
+    unsigned char challenge[32] = {0};
+    uint8_t eeprom_unlock_priv_key[318] = {0};
+
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_entropy_context entropy;
+    mbedtls_pk_context pk;
+
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_entropy_init(&entropy);
+
+    mbedtls_ctr_drbg_set_entropy_len(&ctr_drbg, MBEDTLS_CTR_DRBG_KEYSIZE);   // 32-byte
+    mbedtls_ctr_drbg_set_nonce_len(&ctr_drbg, MBEDTLS_CTR_DRBG_KEYSIZE / 2); // 16-byte
+
+    if (mbedtls_ctr_drbg_seed(&ctr_drbg, ctr_drbg_self_test_entropy, &entropy,
+                              (const unsigned char *)pers, strlen(pers)) != 0)
+    {
+        return 1;
+    }
+
+    ret = mbedtls_ctr_drbg_random(&ctr_drbg, challenge, sizeof(challenge));
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    mbedtls_pk_init(&pk);
+
+    // Read private key from EEPROM
+    EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
+               320);
+
+    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
+                               mbedtls_ctr_drbg_random, &ctr_drbg);
+
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
         MESSAGE_PACKET message;

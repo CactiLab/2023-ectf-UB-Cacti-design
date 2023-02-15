@@ -33,6 +33,7 @@ void random_gnereator(  mbedtls_ctr_drbg_context *drbg,
                         unsigned char *output,
                         size_t output_size);
 
+int ctr_drbg_self_test_entropy(void *data, unsigned char *buf, size_t len);
 void mpu_init();
 
 #endif // CONSTANT_H
