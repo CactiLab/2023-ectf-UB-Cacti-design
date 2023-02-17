@@ -29,6 +29,9 @@
 
 #include "secrets.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/md.h"
+#include "mbedtls/memory_buffer_alloc.h"
+// #include "my_alloc.h"
 
 #include "board_link.h"
 #include "feature_list.h"
@@ -92,6 +95,7 @@ typedef struct
 
 #define UNLOCK_CMD "unlock"
 const char *pers = "fuzz_privkey";
+unsigned char memory_buf[8192];
 
 /*** Function definitions ***/
 // Core functions - all functionality supported by fob
@@ -154,6 +158,7 @@ int main(void)
     // set the environment for random number genreation
     // -------------------------------------------------------------------------
     dwt_init();
+
 
 #ifdef ENABLE_MPU
     // Initizalize MPU
@@ -368,11 +373,13 @@ void unlockCar(FLASH_DATA *fob_state_ram)
 {
     int ret = 0;
     unsigned char challenge[32] = {0};
-    uint8_t eeprom_unlock_priv_key[318] = {0};
+    uint8_t eeprom_unlock_priv_key[319] = {0};
 
     mbedtls_ctr_drbg_context ctr_drbg;
     mbedtls_entropy_context entropy;
     mbedtls_pk_context pk;
+
+    mbedtls_memory_buffer_alloc_init( memory_buf, sizeof(memory_buf) );
 
     mbedtls_ctr_drbg_init(&ctr_drbg);
     mbedtls_entropy_init(&entropy);
@@ -385,7 +392,7 @@ void unlockCar(FLASH_DATA *fob_state_ram)
     {
         return 1;
     }
-
+    /*
     ret = mbedtls_ctr_drbg_random(&ctr_drbg, challenge, sizeof(challenge));
     if (ret != 0)
     {
@@ -393,14 +400,26 @@ void unlockCar(FLASH_DATA *fob_state_ram)
         {
         }
     }
-
+    */
     mbedtls_pk_init(&pk);
 
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
                320);
 
-    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
+    // mbedtls_platform_set_calloc_free(my_calloc, my_free);
+
+    /*
+    void *ctx = mbedtls_calloc(1, sizeof(mbedtls_pk_context));
+    if (ctx != NULL) {
+        mbedtls_rsa_init((mbedtls_rsa_context *) ctx);
+    }
+    mbedtls_free(ctx);
+    */
+
+
+
+    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, 319, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
 
     if (ret != 0)
@@ -409,6 +428,41 @@ void unlockCar(FLASH_DATA *fob_state_ram)
         {
         }
     }
+
+    // Check if the key is valid
+    // mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
+    // ret = mbedtls_rsa_check_privkey(&rsa);
+    // if (ret != 0)
+    // {
+    //     while (1)
+    //     {
+    //     }
+    // }
+
+    // Hash the challenge
+    unsigned char hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), challenge,
+                     sizeof(challenge), hash);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Sign the hash
+    unsigned char signature[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = {0};
+    size_t olen = 0;
+    ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
+                          &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+
 
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
