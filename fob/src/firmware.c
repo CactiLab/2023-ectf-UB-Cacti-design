@@ -92,6 +92,7 @@ typedef struct
 #define PAIRING_EEPROM_PUB_KEY_LOC 0x60
 #define UNLOCK_EEPROM_PRIV_KEY_LOC 0xC0
 #define PAIRING_EEPROM_PRIV_KEY_LOC 0xC0
+#define UNLOCK_EEPROM_PUB_KEY_LOC 0x200  // for testing
 
 #define UNLOCK_CMD "unlock"
 const char *pers = "fuzz_privkey";
@@ -373,7 +374,7 @@ void unlockCar(FLASH_DATA *fob_state_ram)
 {
     int ret = 0;
     unsigned char challenge[32] = {0};
-    uint8_t eeprom_unlock_priv_key[319] = {0};
+    uint8_t eeprom_unlock_priv_key[318] = {0};
 
     mbedtls_ctr_drbg_context ctr_drbg;
     mbedtls_entropy_context entropy;
@@ -419,7 +420,7 @@ void unlockCar(FLASH_DATA *fob_state_ram)
 
 
 
-    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, 319, NULL, 0,
+    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, 318, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
 
     if (ret != 0)
@@ -462,6 +463,40 @@ void unlockCar(FLASH_DATA *fob_state_ram)
         }
     }
 
+    uint8_t eeprom_unlock_pub_key[94] = {0};
+    // Read public key from EEPROM
+    EEPROMRead((uint32_t *)eeprom_unlock_pub_key, UNLOCK_EEPROM_PUB_KEY_LOC,
+               96);
+
+    // Parse public key
+    mbedtls_pk_init(&pk);
+    ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, 94);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Hash the signature
+    // unsigned char hash2[32] = {0};
+    // ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), signature,
+    //                  olen, hash2);
+    // if (ret != 0)
+    // {
+    //     while (1)
+    //     {
+    //     }
+    // }
+
+    // Verify the signature
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, olen);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
 
 
     if (fob_state_ram->paired == FLASH_PAIRED)
