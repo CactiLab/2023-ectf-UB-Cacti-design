@@ -14,7 +14,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "inc/hw_ints.h"
 #include "inc/hw_memmap.h"
@@ -51,7 +50,7 @@ typedef struct
 {
     FEATURE_DATA feature_info;
     uint8_t signature_size;
-    uint8_t signature[256];
+    uint8_t signature[128];
 } SIGNED_FEATURE;
 
 /*** Macro Definitions ***/
@@ -60,15 +59,16 @@ typedef struct
 // Definitions for unlock message location in EEPROM
 #define UNLOCK_EEPROM_LOC 0x7C0
 #define UNLOCK_EEPROM_SIZE 64
+#define EEPROM_UNLOCK_PUB_SIZE 96
 
 extern mbedtls_ctr_drbg_context ctr_drbg;
 unsigned char memory_buf[8192];
+unsigned char challenge[32] = {0};
 
 /*** Function definitions ***/
 // Core functions - unlockCar and startCar
 bool sendChallenge(void);
-bool receiveAnswer(void);
-void unlockCar(void);
+void receiveAnswer(void);
 void startCar(void);
 
 // Helper functions - sending ack messages
@@ -124,7 +124,6 @@ int main(void)
 bool sendChallenge(void)
 {
     int ret = 0;
-    unsigned char challenge[32] = {0};
 
     // Create a message struct variable for receiving data
     MESSAGE_PACKET message;
@@ -135,6 +134,7 @@ bool sendChallenge(void)
     receive_board_message_by_type(&message, UNLOCK_MAGIC);
 
     // Generate challenge
+    memset(challenge, 0, sizeof(challenge));
     drng_seed();
     ret = mbedtls_ctr_drbg_random(&ctr_drbg, challenge, sizeof(challenge));
     if (ret == 0)
@@ -150,16 +150,10 @@ bool sendChallenge(void)
     return false;
 }
 
-bool receiveAnswer()
-{
-    // TODO: Implement
-    return false;
-}
-
 /**
- * @brief Function that handles unlocking of car
+ * @brief Function that handles the answer and unlock of car
  */
-void unlockCar(void)
+void receiveAnswer()
 {
     // Create a message struct variable for receiving data
     MESSAGE_PACKET message;
@@ -167,13 +161,45 @@ void unlockCar(void)
     message.buffer = buffer;
 
     // Receive packet with some error checking
-    receive_board_message_by_type(&message, UNLOCK_MAGIC);
+    receive_board_message_by_type(&message, ANSWER_MAGIC);
 
-    // Pad payload to a string
-    message.buffer[message.message_len] = 0;
+    unsigned char signature[256] = {0};
+    memcpy(signature, message.buffer, message.message_len);
 
-    // If the data transfer is the password, unlock
-    if (!strcmp((char *)(message.buffer), (char *)pass))
+    int ret = 0;
+    uint8_t eeprom_unlock_pub_key[EEPROM_UNLOCK_PUB_SIZE] = {0};
+
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+
+    // Read public key from EEPROM
+    EEPROMRead((uint32_t *)eeprom_unlock_pub_key, UNLOCK_EEPROM_PUB_KEY_LOC,
+               96);
+
+    // Parse public key
+    mbedtls_pk_init(&pk);
+    ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, UNLOCK_PUB_KEY_SIZE);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Hash the challenge
+    unsigned char hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), challenge,
+                     sizeof(challenge), hash);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Verify the signature
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, message.message_len);
+    if (ret == 0)
     {
         uint8_t eeprom_message[64];
         // Read last 64B of EEPROM
@@ -191,6 +217,9 @@ void unlockCar(void)
     {
         sendAckFailure();
     }
+
+    memset(challenge, 0, sizeof(challenge));
+    return;
 }
 
 /**
@@ -198,6 +227,9 @@ void unlockCar(void)
  */
 void startCar(void)
 {
+    int ret = 0;
+    mbedtls_pk_context pk;
+
     // Create a message struct variable for receiving data
     MESSAGE_PACKET message;
     uint8_t buffer[256];
@@ -206,7 +238,43 @@ void startCar(void)
     // Receive start message
     receive_board_message_by_type(&message, START_MAGIC);
 
-    FEATURE_DATA *feature_info = (FEATURE_DATA *)buffer;
+    SIGNED_FEATURE signed_feature;
+    memcpy(&signed_feature, message.buffer, message.message_len);
+
+    uint8_t eeprom_unlock_pub_key[EEPROM_UNLOCK_PUB_SIZE] = {0};
+    // Read public key from EEPROM
+    EEPROMRead((uint32_t *)eeprom_unlock_pub_key, UNLOCK_EEPROM_PUB_KEY_LOC,
+               EEPROM_UNLOCK_PUB_SIZE);
+
+    FEATURE_DATA *feature_info = (FEATURE_DATA *)&signed_feature.feature_info;
+    size_t a = sizeof(FEATURE_DATA);
+    // Hash the feature info
+    unsigned char hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), feature_info,
+                     a, hash);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Parse public key
+    mbedtls_pk_init(&pk);
+    ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, UNLOCK_PUB_KEY_SIZE);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Verify the signature
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signed_feature.signature, signed_feature.signature_size);
+    if (ret != 0)
+    {
+        return;
+    }
 
     // Verify correct car id
     if (strcmp((char *)car_id, (char *)feature_info->car_id))

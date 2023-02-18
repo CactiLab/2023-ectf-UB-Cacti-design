@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "mbedtls/entropy.h"
 #include "mbedtls/build_info.h"
@@ -14,11 +15,9 @@
 // #define ENBALE_DRBG
 // #define ENABLE_MPU
 
-#define EEPROM_UNLOCK_PUB_SIZE 96
-
 #define DWT_TRACE_ENABLE 0x40000001
 #define ARM_CM_DEMCR (*(uint32_t *)0xE000EDFC)
-#define ARM_CM_DWT_CTRL (*(uint32_t *)0xE0001000)	// DWT->CTRL (core_cm33.h, DWT_Type)
+#define ARM_CM_DWT_CTRL (*(uint32_t *)0xE0001000)   // DWT->CTRL (core_cm33.h, DWT_Type)
 #define ARM_CM_DWT_CYCCNT (*(uint32_t *)0xE0001004) // DWT->CYCCNT
 
 void mpu_init();

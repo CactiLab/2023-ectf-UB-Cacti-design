@@ -30,7 +30,6 @@ void dwt_init(void)
 int ctr_drbg_dwt_entropy(void *data, unsigned char *buf,
                          size_t len)
 {
-    const unsigned char *p = data;
     uint32_t tmp[OUTPUT_SIZE / 4] = {0};
     for (size_t i = 0; i < OUTPUT_SIZE / 4; i++)
     {

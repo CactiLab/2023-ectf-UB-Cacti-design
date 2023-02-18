@@ -26,8 +26,8 @@
 #define PAIR_MAGIC 0x55
 #define UNLOCK_MAGIC 0x56
 #define CHALLENGE_MAGIC 0x57
-#define ENABLE_MAGIC 0x58
-#define START_MAGIC 0x58
+#define ANSWER_MAGIC 0x58
+#define START_MAGIC 0x60
 #define BOARD_UART ((uint32_t)UART1_BASE)
 
 /**

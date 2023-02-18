@@ -14,7 +14,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "inc/hw_ints.h"
 #include "inc/hw_memmap.h"
@@ -58,9 +57,9 @@ typedef struct
 typedef struct
 {
     uint8_t car_id[8];
-    uint16_t unlock_priv_key_size;
     uint8_t password[8];
     uint8_t pin[8];
+    uint16_t unlock_priv_key_size;
 } PAIR_PACKET;
 
 // Defines a struct for the format of start message
@@ -84,7 +83,7 @@ typedef struct
 {
     FEATURE_DATA feature_info;
     uint8_t signature_size;
-    uint8_t signature[256];
+    uint8_t signature[128];
 } SIGNED_FEATURE;
 
 /*** Macro Definitions ***/
@@ -103,7 +102,8 @@ unsigned char memory_buf[8192];
 // Core functions - all functionality supported by fob
 void saveFobState(FLASH_DATA *flash_data);
 void pairFob(FLASH_DATA *fob_state_ram);
-void unlockCar(FLASH_DATA *fob_state_ram);
+void sendUnlock(FLASH_DATA *fob_state_ram);
+uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram);
 void enableFeature(FLASH_DATA *fob_state_ram);
 void startCar(FLASH_DATA *fob_state_ram);
 
@@ -123,9 +123,11 @@ int main(void)
     FLASH_DATA fob_state_ram;
     FLASH_DATA *fob_state_flash = (FLASH_DATA *)FOB_STATE_PTR;
 
+    memset(&fob_state_ram, 0, sizeof(FLASH_DATA));
+
 // If paired fob, initialize the system information
 #if PAIRED == 1
-    if (fob_state_flash->paired == FLASH_UNPAIRED)
+    if (fob_state_flash->paired != FLASH_PAIRED)
     {
         strcpy((char *)(fob_state_ram.pair_info.password), PASSWORD);
         strcpy((char *)(fob_state_ram.pair_info.pin), PAIR_PIN);
@@ -226,8 +228,8 @@ int main(void)
             debounce_sw_state = GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4);
             if (debounce_sw_state == current_sw_state)
             {
-                unlockCar(&fob_state_ram);
-                // startCar(&fob_state_ram);
+                sendUnlock(&fob_state_ram);
+                recChallengeSendAns(&fob_state_ram);
                 if (receiveAck())
                 {
                     startCar(&fob_state_ram);
@@ -273,6 +275,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
     // Start pairing transaction - fob is not paired
     else
     {
+        // TODO: Vulnerable to buffer overflow
         message.buffer = (uint8_t *)&fob_state_ram->pair_info;
         receive_board_message_by_type(&message, PAIR_MAGIC);
         fob_state_ram->paired = FLASH_PAIRED;
@@ -330,34 +333,57 @@ void enableFeature(FLASH_DATA *fob_state_ram)
 }
 
 /**
- * @brief Function that handles the fob unlocking a car
+ * @brief Function that sends an unlock message to the car
  *
  * @param fob_state_ram pointer to the current fob state in ram
  */
-void unlockCar(FLASH_DATA *fob_state_ram)
+void sendUnlock(FLASH_DATA *fob_state_ram)
 {
-#ifdef DEBUG
-    int ret = 0;
+    if (fob_state_ram->paired == FLASH_PAIRED)
+    {
+        MESSAGE_PACKET message;
+        message.message_len = 6;
+        message.magic = UNLOCK_MAGIC;
+        message.buffer = NULL;
+        send_board_message(&message);
+    }
+}
+
+/**
+ * @brief Function that receives a challenge from the car and sends an answer
+ *
+ * @param fob_state_ram pointer to the current fob state in ram
+ */
+uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
+{
+    if (fob_state_ram->paired != FLASH_PAIRED)
+    {
+        return 0;
+    }
+
+    MESSAGE_PACKET message;
+    uint8_t buffer[256];
+    message.buffer = buffer;
+    receive_board_message_by_type(&message, CHALLENGE_MAGIC);
+
     unsigned char challenge[32] = {0};
-    uint8_t eeprom_unlock_priv_key[320] = {0};
+    if (message.message_len != sizeof(challenge))
+    {
+        return 0;
+    }
+
+    memcpy(challenge, message.buffer, sizeof(challenge));
+
+    int ret = 0;
+    uint8_t eeprom_unlock_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
 
     mbedtls_pk_context pk;
-
     mbedtls_pk_init(&pk);
     drng_seed();
 
-    // Generate challenge
-    ret = mbedtls_ctr_drbg_random(&ctr_drbg, challenge, sizeof(challenge));
-    if (ret != 0)
-    {
-        while (1)
-        {
-        }
-    }
-
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
-               320);
+               EEPROM_PAIRING_PRIV_SIZE);
 
     ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
@@ -380,7 +406,7 @@ void unlockCar(FLASH_DATA *fob_state_ram)
     }
 
     // Sign the hash
-    unsigned char signature[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = {0};
+    unsigned char signature[128] = {0};
     size_t olen = 0;
     ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
                           &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
@@ -391,40 +417,13 @@ void unlockCar(FLASH_DATA *fob_state_ram)
         }
     }
 
-    uint8_t eeprom_unlock_pub_key[96] = {0};
-    // Read public key from EEPROM
-    EEPROMRead((uint32_t *)eeprom_unlock_pub_key, UNLOCK_EEPROM_PUB_KEY_LOC,
-               96);
+    // Send the signature
+    message.buffer = (uint8_t *)&signature;
+    message.message_len = olen;
+    message.magic = ANSWER_MAGIC;
+    send_board_message(&message);
 
-    // Parse public key
-    mbedtls_pk_init(&pk);
-    ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, UNLOCK_PUB_KEY_SIZE);
-    if (ret != 0)
-    {
-        while (1)
-        {
-        }
-    }
-
-    // Verify the signature
-    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, olen);
-    if (ret != 0)
-    {
-        while (1)
-        {
-        }
-    }
-
-#endif // DEBUG
-
-    if (fob_state_ram->paired == FLASH_PAIRED)
-    {
-        MESSAGE_PACKET message;
-        message.message_len = 6;
-        message.magic = UNLOCK_MAGIC;
-        message.buffer = NULL;
-        send_board_message(&message);
-    }
+    return 1;
 }
 
 /**
@@ -434,7 +433,11 @@ void unlockCar(FLASH_DATA *fob_state_ram)
  */
 void startCar(FLASH_DATA *fob_state_ram)
 {
-#ifdef DEBUG
+    if (fob_state_ram->paired != FLASH_PAIRED)
+    {
+        return 0;
+    }
+
     int ret = 0;
     mbedtls_pk_context pk;
     uint8_t eeprom_unlock_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
@@ -458,8 +461,10 @@ void startCar(FLASH_DATA *fob_state_ram)
 
     // Hash the feature data
     unsigned char hash[32] = {0};
-    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), &fob_state_ram->feature_info,
-                     sizeof(&fob_state_ram->feature_info), hash);
+    FEATURE_DATA *feature_info = (FEATURE_DATA *)&fob_state_ram->feature_info;
+
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), feature_info,
+                     sizeof(FEATURE_DATA), hash);
     if (ret != 0)
     {
         while (1)
@@ -468,7 +473,7 @@ void startCar(FLASH_DATA *fob_state_ram)
     }
 
     // Sign feature hash
-    unsigned char signature[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = {0};
+    unsigned char signature[128] = {0};
     size_t olen = 0;
     ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
                           &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
@@ -479,39 +484,17 @@ void startCar(FLASH_DATA *fob_state_ram)
         }
     }
 
-    uint8_t eeprom_unlock_pub_key[EEPROM_UNLOCK_PUB_SIZE] = {0};
-    // Read public key from EEPROM
-    EEPROMRead((uint32_t *)eeprom_unlock_pub_key, UNLOCK_EEPROM_PUB_KEY_LOC,
-               EEPROM_UNLOCK_PUB_SIZE);
+    SIGNED_FEATURE signed_feature;
+    memcpy(&signed_feature.feature_info, feature_info,
+           sizeof(FEATURE_DATA));
+    signed_feature.signature_size = olen;
+    memcpy(signed_feature.signature, signature, olen);
 
-    // Parse public key
-    mbedtls_pk_init(&pk);
-    ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, UNLOCK_PUB_KEY_SIZE);
-    if (ret != 0)
-    {
-        while (1)
-        {
-        }
-    }
-
-    // Verify the signature
-    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, olen);
-    if (ret != 0)
-    {
-        while (1)
-        {
-        }
-    }
-#endif // DEBUG
-
-    if (fob_state_ram->paired == FLASH_PAIRED)
-    {
-        MESSAGE_PACKET message;
-        message.magic = START_MAGIC;
-        message.message_len = sizeof(FEATURE_DATA);
-        message.buffer = (uint8_t *)&fob_state_ram->feature_info;
-        send_board_message(&message);
-    }
+    MESSAGE_PACKET message;
+    message.magic = START_MAGIC;
+    message.message_len = sizeof(signed_feature);
+    message.buffer = (uint8_t *)&signed_feature;
+    send_board_message(&message);
 }
 
 /**

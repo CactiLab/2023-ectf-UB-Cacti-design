@@ -21,13 +21,11 @@ EEPROM_FEATURE_PUB_SIZE = 96
 EEPROM_PAIRING_PUB_SIZE = 96
 EEPROM_UNLOCK_PRIV_SIZE = 320
 EEPROM_PAIRING_PRIV_SIZE = 320
-EEPROM_UNLOCK_PUB_SIZE = 96  # for testing
 
 EEPROM_FEATURE_PUB_LOC = 0x0
 EEPROM_PAIRING_PUB_LOC = 0x60
 EEPROM_UNLOCK_PRIV_LOC = 0xc0
 EEPROM_PAIRING_PRIV_LOC = 0xc0
-EEPROM_UNLOCK_PUB_LOC = 0x200  # for testing
 
 def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
     # Create a new RSA context
@@ -52,7 +50,6 @@ def main():
     parser.add_argument("--feature-pub-file", type=Path, required=True)
     parser.add_argument("--pairing-pub-file", type=Path, required=True)
     parser.add_argument("--unlock-priv-file", type=Path)
-    parser.add_argument("--unlock-pub-file", type=Path)    # for testing
     parser.add_argument("--pairing-priv-file", type=Path)
     parser.add_argument("--header-file", type=Path)
     parser.add_argument("--eeprom-file", type=Path, required=True)
@@ -75,13 +72,7 @@ def main():
         unlock_priv_key_size = len(unlock_priv_key_data)
         image_unlock_priv_key_data = unlock_priv_key_data.ljust(EEPROM_UNLOCK_PRIV_SIZE, b'\xff')
 
-        # for testing
-        unlock_pub_key_data = args.unlock_pub_file.read_bytes()
-        unlock_pub_key_size = len(unlock_pub_key_data)
-        image_unlock_pub_key_data = unlock_pub_key_data.ljust(EEPROM_UNLOCK_PUB_SIZE, b'\xff')
-        
         eeprom_data += image_unlock_priv_key_data
-        eeprom_data += image_unlock_pub_key_data # for testing
 
         # Paired, write the secrets to the header file
         with open(args.header_file, "w") as fp:
@@ -94,7 +85,6 @@ def main():
             fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")
             fp.write(f"#define UNLOCK_PRIV_KEY_SIZE {unlock_priv_key_size}\n\n")
             fp.write(f"#define PAIRING_PRIV_KEY_SIZE 0\n\n")
-            fp.write(f"#define UNLOCK_PUB_KEY_SIZE {unlock_pub_key_size}\n\n") # for testing
             fp.write('#define PASSWORD "unlock"\n\n')
             fp.write("#endif\n")
     else:

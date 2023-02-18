@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "mbedtls/entropy.h"
 #include "mbedtls/build_info.h"
@@ -18,7 +19,6 @@
 #define EEPROM_PAIRING_PUB_SIZE 96
 #define EEPROM_UNLOCK_PRIV_SIZE 320
 #define EEPROM_PAIRING_PRIV_SIZE 320
-#define EEPROM_UNLOCK_PUB_SIZE 96
 
 #define DWT_TRACE_ENABLE 0x40000001
 #define ARM_CM_DEMCR (*(uint32_t *)0xE000EDFC)
