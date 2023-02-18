@@ -16,24 +16,15 @@
 
 #define DWT_TRACE_ENABLE 0x40000001
 #define ARM_CM_DEMCR (*(uint32_t *)0xE000EDFC)
-#define ARM_CM_DWT_CTRL (*(uint32_t *)0xE0001000)	// DWT->CTRL (core_cm33.h, DWT_Type)
+#define ARM_CM_DWT_CTRL (*(uint32_t *)0xE0001000)   // DWT->CTRL (core_cm33.h, DWT_Type)
 #define ARM_CM_DWT_CYCCNT (*(uint32_t *)0xE0001004) // DWT->CYCCNT
 
-// functions for random number generation
-void dwt_init(void);
-void random_twice_with_ctr_drbg();
-void random_init( mbedtls_ctr_drbg_context *drbg, 
-                  mbedtls_entropy_context *entropy);
-void random_exit( mbedtls_ctr_drbg_context *drbg, 
-                  mbedtls_entropy_context *entropy);                  
-void random_gnereator(  mbedtls_ctr_drbg_context *drbg, 
-                        mbedtls_entropy_context *entropy, 
-                        size_t entropy_len,
-                        size_t nonce_len,
-                        unsigned char *output,
-                        size_t output_size);
-
-int ctr_drbg_self_test_entropy(void *data, unsigned char *buf, size_t len);
 void mpu_init();
+
+void dwt_init(void);
+int ctr_drbg_dwt_entropy(void *data, unsigned char *buf, size_t len);
+int drng_init(void);
+int drng_seed(void);
+int drng_free(void);
 
 #endif // CONSTANT_H
