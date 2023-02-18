@@ -18,6 +18,8 @@ from mbedtls import pk
 
 EEPROM_UNLOCK_PUB_SIZE = 96
 
+EEPROM_UNLOCK_PUB_LOC = 0x0
+
 def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
     # Create a new RSA context
     rsa = pk.RSA()
@@ -48,10 +50,7 @@ def main():
         generate_rsa_key_pair(512, args.unlock_pub_file, args.unlock_priv_file)
 
     pub_key_data = args.unlock_pub_file.read_bytes()
-    # priv_key_data = args.priv_key_file.read_bytes()
-    
     pub_key_size = len(pub_key_data)
-    # priv_key_size = len(priv_key_data)
     
     # Pad the public key to the size of the EEPROM unlock public key
     image_pub_key_data = pub_key_data.ljust(EEPROM_UNLOCK_PUB_SIZE, b'\xff')
@@ -64,7 +63,6 @@ def main():
         fp.write("#ifndef __CAR_SECRETS__\n")
         fp.write("#define __CAR_SECRETS__\n\n")
         fp.write(f"#define UNLOCK_PUB_KEY_SIZE {pub_key_size}\n\n")
-        fp.write(f"#define UNLOCK_EEPROM_PUB_KEY_LOC 0x0\n\n")
         fp.write(f'#define CAR_ID "{args.car_id}"\n\n')
         fp.write('#define PASSWORD "unlock"\n\n')
         fp.write("#endif\n")

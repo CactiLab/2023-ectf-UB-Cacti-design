@@ -31,19 +31,12 @@
 #include "mbedtls/pk.h"
 #include "mbedtls/md.h"
 #include "mbedtls/memory_buffer_alloc.h"
-// #include "my_alloc.h"
 
 #include "board_link.h"
 #include "feature_list.h"
 #include "uart.h"
 #include "syscalls.h"
 #include "constant.h"
-
-// this will run if EXAMPLE_AES is defined in the Makefile (see line 54)
-#ifdef EXAMPLE_AES
-#include "aes.h"
-#endif
-// #define PAIRED 1
 
 #define FOB_STATE_PTR 0x3FC00
 #define FLASH_DATA_SIZE           \
@@ -90,7 +83,7 @@ typedef struct
 typedef struct
 {
     FEATURE_DATA feature_info;
-    uint8_t signature_size[8];
+    uint8_t signature_size;
     uint8_t signature[256];
 } SIGNED_FEATURE;
 
@@ -103,7 +96,6 @@ typedef struct
 #define UNLOCK_EEPROM_PUB_KEY_LOC 0x200 // for testing
 
 #define UNLOCK_CMD "unlock"
-// const char *pers1 = "fuzz_privkey";
 extern mbedtls_ctr_drbg_context ctr_drbg;
 unsigned char memory_buf[8192];
 
@@ -178,47 +170,6 @@ int main(void)
     mpu_init();
 #endif
 
-#ifdef ENBALE_DRBG
-    // test_random_generator
-    // random_twice_with_ctr_drbg();
-    // end_test
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context drbg;
-    unsigned char challenge[OUTPUT_SIZE] = {0};
-    unsigned char tmp[OUTPUT_SIZE] = {0};
-    // init objects
-    random_init(&drbg, &entropy);
-    // random_enerator
-    random_gnereator(&drbg, &entropy, MBEDTLS_CTR_DRBG_KEYSIZE, MBEDTLS_CTR_DRBG_KEYSIZE / 2, &challenge, OUTPUT_SIZE);
-    if (memcmp(challenge, tmp, OUTPUT_SIZE) != 0)
-    {
-        dummy_handler();
-    }
-
-#endif
-
-#ifdef EXAMPLE_AES
-    // -------------------------------------------------------------------------
-    // example encryption using tiny-AES-c
-    // -------------------------------------------------------------------------
-    struct AES_ctx ctx;
-    uint8_t key[16] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7,
-                       0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf};
-    uint8_t plaintext[16] = "0123456789abcdef";
-
-    // initialize context
-    AES_init_ctx(&ctx, key);
-
-    // encrypt buffer (encryption happens in place)
-    AES_ECB_encrypt(&ctx, plaintext);
-
-    // decrypt buffer (decryption happens in place)
-    AES_ECB_decrypt(&ctx, plaintext);
-    // -------------------------------------------------------------------------
-    // end example
-    // -------------------------------------------------------------------------
-#endif
-
     // Initialize board link UART
     setup_board_link();
 
@@ -276,6 +227,7 @@ int main(void)
             if (debounce_sw_state == current_sw_state)
             {
                 unlockCar(&fob_state_ram);
+                // startCar(&fob_state_ram);
                 if (receiveAck())
                 {
                     startCar(&fob_state_ram);
@@ -384,6 +336,7 @@ void enableFeature(FLASH_DATA *fob_state_ram)
  */
 void unlockCar(FLASH_DATA *fob_state_ram)
 {
+#ifdef DEBUG
     int ret = 0;
     unsigned char challenge[32] = {0};
     uint8_t eeprom_unlock_priv_key[320] = {0};
@@ -391,7 +344,6 @@ void unlockCar(FLASH_DATA *fob_state_ram)
     mbedtls_pk_context pk;
 
     mbedtls_pk_init(&pk);
-
     drng_seed();
 
     // Generate challenge
@@ -463,12 +415,14 @@ void unlockCar(FLASH_DATA *fob_state_ram)
         }
     }
 
+#endif // DEBUG
+
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
         MESSAGE_PACKET message;
         message.message_len = 6;
         message.magic = UNLOCK_MAGIC;
-        message.buffer = fob_state_ram->pair_info.password;
+        message.buffer = NULL;
         send_board_message(&message);
     }
 }
@@ -480,16 +434,19 @@ void unlockCar(FLASH_DATA *fob_state_ram)
  */
 void startCar(FLASH_DATA *fob_state_ram)
 {
-    /*
+#ifdef DEBUG
     int ret = 0;
     mbedtls_pk_context pk;
-    uint8_t eeprom_unlock_priv_key[320] = {0};
+    uint8_t eeprom_unlock_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
+
+    mbedtls_pk_init(&pk);
+    drng_seed();
 
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
-               320);
+               EEPROM_PAIRING_PRIV_SIZE);
 
-    // Parse public key
+    // Parse private key
     ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0)
@@ -499,7 +456,18 @@ void startCar(FLASH_DATA *fob_state_ram)
         }
     }
 
-    // Sign feature package
+    // Hash the feature data
+    unsigned char hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), &fob_state_ram->feature_info,
+                     sizeof(&fob_state_ram->feature_info), hash);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Sign feature hash
     unsigned char signature[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = {0};
     size_t olen = 0;
     ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
@@ -511,7 +479,30 @@ void startCar(FLASH_DATA *fob_state_ram)
         }
     }
 
-    */
+    uint8_t eeprom_unlock_pub_key[EEPROM_UNLOCK_PUB_SIZE] = {0};
+    // Read public key from EEPROM
+    EEPROMRead((uint32_t *)eeprom_unlock_pub_key, UNLOCK_EEPROM_PUB_KEY_LOC,
+               EEPROM_UNLOCK_PUB_SIZE);
+
+    // Parse public key
+    mbedtls_pk_init(&pk);
+    ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, UNLOCK_PUB_KEY_SIZE);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+
+    // Verify the signature
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, olen);
+    if (ret != 0)
+    {
+        while (1)
+        {
+        }
+    }
+#endif // DEBUG
 
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
