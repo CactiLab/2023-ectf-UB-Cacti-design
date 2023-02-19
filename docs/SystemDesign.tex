@@ -284,6 +284,8 @@ The resulting packaged feature is encrypted by the \verb|Feature_Priv|, and this
 
 The following describes the sequence of pairing an unpaired key fob. It requires the host tool, a paired fob device, and an unpaired fob. The paired and unpaired fobs are connected to the host computer through the UART0 and also connect to each other through the UART0. The host tool takes a pairing PIN as an argument, which needs to be the same pairing PIN as previously used to pair/build the paired fob.
 
+Protection key-points: \textbf{confidentiality of the pairing PIN; confidentiality of the pairing info package.}
+
 \begin{figure}[!htbp]
 	\begin{centering}
 		\includegraphics[width = .6\textwidth]{pic/pair.pdf}
@@ -316,6 +318,8 @@ Notes:
 
 The following describes the sequence of enabling a feature on a paired key fob. It requires the host tool, a paired fob device, and the packaged feature file. The paired fob is connected to the host computer through the UART0.
 
+Protection key-points: \textbf{integrity of the packaged feature.}
+
 \begin{figure}[!htbp]
 	\begin{centering}
 		\includegraphics[width = .5\textwidth]{pic/enable.pdf}
@@ -344,6 +348,8 @@ Notes:
 
 The following describes the sequence of unlocking the car with a paired fob. It requires the host tool, a paired fob device, and a car device. The car device is connected to the host computer through the UART0, and the paired fob connects to the car through the UART1. The connection between the car device and the host computer is only responsible for transmitting the messages that get printed out after the successful unlock.
 
+Protection key-points: \textbf{authenticity of the paired fob; integrity of the feature list.}
+
 \begin{figure}[!htbp]
 	\begin{centering}
 		\includegraphics[width = .6\textwidth]{pic/unlock.pdf}
@@ -357,8 +363,10 @@ The following describes the sequence of unlocking the car with a paired fob. It 
 	\item The paired fob sends the \textit{unlock} command to the UART1, and enter the state to waiting for receiving a respond from the same UART1 socket.
 	\item After the car receives the \textit{unlock} command, it will generate a random value. This random value is called \textit{challenge}.
 	\item The car sends the \textit{challenge} package to the the UART1, and enter the state to waiting for receiving a respond from the same UART1.
-	\item The paired fob receives the \textit{challenge} package and get this random value. Then it combines this random value with the enabled feature list, and sign them with the \verb|Unlock_Priv:CarID|. The resulting package is called \textit{answer \& feature list}, which will be sent to the UART1 to the car.
-	\item The car receives the \textit{answer \& feature list} package and verify it with the \verb|Unlock_Pub:CarID|. If the \textit{answer} message matches the previous generated random value, the car will match the enabled feature list with saved feature secret(s) and send the unlock secret as well as the matched feature secret(s) to the UART0 socket to the host computer.
+	\item The paired fob receives the \textit{challenge} package and get this random value. Then it hashes this random value, and sign it with the \verb|Unlock_Priv:CarID|. The resulting signature is called \textit{answer}, which will be sent to the UART1 to the car.
+	\item The car receives the \textit{answer} package and verify it with the previous random value and \verb|Unlock_Pub:CarID|. If the verification passes, the car will send the unlock secret to the UART0 to the host computer, and also send an ACK message to the UART1 to the paired fob.
+	\item After the paired fob receives the ACK message, it will sign the feature list with  \verb|Unlock_Priv:CarID|, and send the feature list along with the signature to the UART1 to the car.
+	\item The car receives the feature list and the signature and verify it's integrity. If the verification passes, the car will match the feature list and send the feature secret(s) to the UART0 to the host computer.
 \end{enumerate}
 
 \end{document}
