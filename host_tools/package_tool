@@ -1,41 +1,47 @@
 #!/usr/bin/python3 -u
 
 # @file package_tool
-# @author Frederich Stine
+# @author Zheyuan Ma
 # @brief host tool for packaging a feature for a fob
 # @date 2023
-#
-# This source file is part of an example system for MITRE's 2023 Embedded
-# CTF (eCTF). This code is being provided only for educational purposes for the
-# 2023 MITRE eCTF competition, and may not meet MITRE standards for quality.
-# Use this code at your own risk!
-#
-# @copyright Copyright (c) 2023 The MITRE Corporation
 
+import os
 import argparse
-
+import secrets
+from pathlib import Path
+from mbedtls import pk
 
 # @brief Function to create a new feature package
 # @param package_name, name of the file to output package data to
 # @param car_id, the id of the car the feature is being packaged for
 # @param feature_number, the feature number being packaged
-def package(package_name, car_id, feature_number):
-
-    # Pad id lenth to 8 bytes
-    car_id_len = len(car_id)
-    car_id_pad = (8 - car_id_len) * "\0"
-
+def package(package_name, car_id, feature_number, secrets_folder, package_dir):
+    
     # Create package to match defined structure on fob
     package_message_bytes = (
-        str.encode(car_id + car_id_pad)
+        car_id.to_bytes(1, "little")
         + feature_number.to_bytes(1, "little")
-        + str.encode("\n")
+        + secrets.token_bytes(8)
+        # + str.encode("\n")
     )
-
+    print("Package: ", bytes.hex(package_message_bytes))
+    
+    rsa = pk.RSA.from_file(os.path.join(secrets_folder, "feature_priv.der"))
+    sig = rsa.sign(package_message_bytes, digestmod="SHA256")
+    
+    print("Signature: ", bytes.hex(sig))
+    print("Signature length: ", len(sig))
+    
+    # rsa_pub = pk.RSA.from_file(os.path.join(secrets_folder, "feature_pub.der"))
+    # result = rsa_pub.verify(package_message_bytes, sig, digestmod="SHA256")
+    # print("Verification result: ", result)
+    
+    package_bytes = package_message_bytes + sig
+    
     # Write data out to package file
     # /package_dir/ is the mounted location inside the container - should not change
-    with open(f"/package_dir/{package_name}", "wb") as fhandle:
-        fhandle.write(package_message_bytes)
+    package_file = Path(os.path.join(package_dir, package_name))
+    package_file.write_bytes(package_bytes)
 
     print("Feature packaged")
 
@@ -50,7 +56,7 @@ def main():
         "--package-name", help="Name of the package file", type=str, required=True,
     )
     parser.add_argument(
-        "--car-id", help="Car ID", type=str, required=True,
+        "--car-id", help="Car ID", type=int, required=True,
     )
     parser.add_argument(
         "--feature-number",
@@ -58,10 +64,26 @@ def main():
         type=int,
         required=True,
     )
+    
+    parser.add_argument(
+        "--secrets-folder",
+        help="Folder containing secrets",
+        default="/secrets",
+        type=str,
+        required=False,
+    )
+    
+    parser.add_argument(
+        "--package-folder",
+        help="Output folder for package",
+        default="/package_dir",
+        type=str,
+        required=False,
+    )
 
     args = parser.parse_args()
 
-    package(args.package_name, args.car_id, args.feature_number)
+    package(args.package_name, args.car_id, args.feature_number, args.secrets_folder, args.package_folder)
 
 
 if __name__ == "__main__":
