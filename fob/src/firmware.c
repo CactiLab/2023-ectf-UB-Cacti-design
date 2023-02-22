@@ -346,6 +346,7 @@ void sendUnlock(FLASH_DATA *fob_state_ram)
         message.magic = UNLOCK_MAGIC;
         message.buffer = NULL;
         send_board_message(&message);
+        // uart_write(HOST_UART, (uint8_t *)"unlock_sent\n", sizeof("unlock_sent\n"));
     }
 }
 
@@ -416,12 +417,15 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
         {
         }
     }
+    mbedtls_pk_free(&pk);
 
     // Send the signature
     message.buffer = (uint8_t *)&signature;
     message.message_len = olen;
     message.magic = ANSWER_MAGIC;
     send_board_message(&message);
+
+    // uart_write(HOST_UART, (uint8_t *)"answer_sent\n", sizeof("answer_sent\n"));
 
     return 1;
 }
@@ -483,6 +487,7 @@ void startCar(FLASH_DATA *fob_state_ram)
         {
         }
     }
+    mbedtls_pk_free(&pk);
 
     SIGNED_FEATURE signed_feature;
     memcpy(&signed_feature.feature_info, feature_info,
@@ -495,6 +500,7 @@ void startCar(FLASH_DATA *fob_state_ram)
     message.message_len = sizeof(signed_feature);
     message.buffer = (uint8_t *)&signed_feature;
     send_board_message(&message);
+    // uart_write(HOST_UART, (uint8_t *)"start_sent\n", sizeof("start_sent\n"));
 }
 
 /**

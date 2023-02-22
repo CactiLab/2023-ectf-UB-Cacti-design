@@ -144,6 +144,7 @@ bool sendChallenge(void)
         message.magic = CHALLENGE_MAGIC;
         message.buffer = (uint8_t *)&challenge;
         send_board_message(&message);
+        // uart_write(HOST_UART, (uint8_t *)"challenge_sent\n", sizeof("challenge_sent\n"));
 
         return true;
     }
@@ -199,6 +200,7 @@ void receiveAnswer()
 
     // Verify the signature
     ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, message.message_len);
+    mbedtls_pk_free(&pk);
     if (ret == 0)
     {
         uint8_t eeprom_message[64];
@@ -208,6 +210,7 @@ void receiveAnswer()
 
         // Write out full flag if applicable
         uart_write(HOST_UART, eeprom_message, UNLOCK_EEPROM_SIZE);
+        // uart_write(HOST_UART, (uint8_t *)"\n", sizeof("\n"));
 
         sendAckSuccess();
 
@@ -275,12 +278,15 @@ void startCar(void)
     {
         return;
     }
+    mbedtls_pk_free(&pk);
 
     // Verify correct car id
     if (strcmp((char *)car_id, (char *)feature_info->car_id))
     {
         return;
     }
+    // uart_write(HOST_UART, (uint8_t *)"feature_verified\n", sizeof("feature_verified\n"));
+
 
     // Print out features for all active features
     for (int i = 0; i < feature_info->num_active; i++)
