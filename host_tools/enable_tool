@@ -12,14 +12,17 @@
 #
 # @copyright Copyright (c) 2023 The MITRE Corporation
 
+import os
 import socket
 import argparse
+from pathlib import Path
 
+ENABLE_MAGIC = 0x61
 
 # @brief Function to send commands to enable a feature on a fob
 # @param fob_bridge, bridged serial connection to fob
 # @param package_name, name of the package file to read from
-def enable(fob_bridge, package_name):
+def enable(fob_bridge, package_name, package_dir):
 
     # Connect fob socket to serial
     fob_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,11 +32,19 @@ def enable(fob_bridge, package_name):
     fob_sock.send(b"enable\n")
 
     # Open and read binary data from package file
-    with open(f"/package_dir/{package_name}", "rb") as fhandle:
-        message = fhandle.read()
+    package_file = Path(os.path.join(package_dir, package_name))
+    package_file_data = package_file.read_bytes()
 
+    # Send magic number to fob
+    fob_sock.send(ENABLE_MAGIC.to_bytes(1, "little"))
+    
+    # Send package length to fob
+    message_len = len(package_file_data)
+    fob_sock.send(message_len.to_bytes(1, "little"))
+    
     # Send package to fob
-    fob_sock.send(message)
+    fob_sock.send(package_file_data)
+
 
     # Set timeout for if enable fails
     fob_sock.settimeout(5)
@@ -62,10 +73,18 @@ def main():
     parser.add_argument(
         "--package-name", help="Name of the package file", type=str, required=True,
     )
+    
+    parser.add_argument(
+        "--package-folder",
+        help="Folder containing the package file",
+        default="/package_dir",
+        type=str,
+        required=False,
+    )
 
     args = parser.parse_args()
 
-    enable(args.fob_bridge, args.package_name)
+    enable(args.fob_bridge, args.package_name, args.package_folder)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import argparse
 import secrets
 from pathlib import Path
 from mbedtls import pk
+from mbedtls import hashlib
 
 # @brief Function to create a new feature package
 # @param package_name, name of the file to output package data to
@@ -27,7 +28,7 @@ def package(package_name, car_id, feature_number, secrets_folder, package_dir):
     print("Package: ", bytes.hex(package_message_bytes))
     
     rsa = pk.RSA.from_file(os.path.join(secrets_folder, "feature_priv.der"))
-    sig = rsa.sign(package_message_bytes, digestmod="SHA256")
+    sig = rsa.sign(package_message_bytes)
     
     print("Signature: ", bytes.hex(sig))
     print("Signature length: ", len(sig))

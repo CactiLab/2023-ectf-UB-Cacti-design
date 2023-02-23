@@ -28,6 +28,7 @@
 #define CHALLENGE_MAGIC 0x57
 #define ANSWER_MAGIC 0x58
 #define START_MAGIC 0x60
+#define ENABLE_MAGIC 0x61
 #define BOARD_UART ((uint32_t)UART1_BASE)
 
 /**

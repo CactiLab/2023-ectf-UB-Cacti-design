@@ -49,14 +49,15 @@
 // Defines a struct for the format of an enable message
 typedef struct
 {
-    uint8_t car_id[8];
+    uint8_t car_id;
     uint8_t feature;
+    uint8_t token[8];
 } ENABLE_PACKET;
 
 // Defines a struct for the format of a pairing message
 typedef struct
 {
-    uint8_t car_id[8];
+    uint8_t car_id;
     uint8_t password[8];
     uint8_t pin[8];
     uint16_t unlock_priv_key_size;
@@ -65,7 +66,7 @@ typedef struct
 // Defines a struct for the format of start message
 typedef struct
 {
-    uint8_t car_id[8];
+    uint8_t car_id;
     uint8_t num_active;
     uint8_t features[NUM_FEATURES];
 } FEATURE_DATA;
@@ -92,7 +93,6 @@ typedef struct
 #define PAIRING_EEPROM_PUB_KEY_LOC 0x60
 #define UNLOCK_EEPROM_PRIV_KEY_LOC 0xC0
 #define PAIRING_EEPROM_PRIV_KEY_LOC 0xC0
-#define UNLOCK_EEPROM_PUB_KEY_LOC 0x200 // for testing
 
 #define UNLOCK_CMD "unlock"
 extern mbedtls_ctr_drbg_context ctr_drbg;
@@ -131,8 +131,10 @@ int main(void)
     {
         strcpy((char *)(fob_state_ram.pair_info.password), PASSWORD);
         strcpy((char *)(fob_state_ram.pair_info.pin), PAIR_PIN);
-        strcpy((char *)(fob_state_ram.pair_info.car_id), CAR_ID);
-        strcpy((char *)(fob_state_ram.feature_info.car_id), CAR_ID);
+        // strcpy((char *)(fob_state_ram.pair_info.car_id), CAR_ID);
+        // strcpy((char *)(fob_state_ram.feature_info.car_id), CAR_ID);
+        fob_state_ram.pair_info.car_id = CAR_ID;
+        fob_state_ram.feature_info.car_id = CAR_ID;
         fob_state_ram.paired = FLASH_PAIRED;
         fob_state_ram.pair_info.unlock_priv_key_size = UNLOCK_PRIV_KEY_SIZE;
 
@@ -198,7 +200,7 @@ int main(void)
             uint8_t uart_char = (uint8_t)uart_readb(HOST_UART);
 
             if ((uart_char != '\r') && (uart_char != '\n') && (uart_char != '\0') &&
-                (uart_char != 0xD))
+                (uart_char != 0xD) && uart_buffer_index < sizeof(uart_buffer) - 1)
             {
                 uart_buffer[uart_buffer_index] = uart_char;
                 uart_buffer_index++;
@@ -295,41 +297,92 @@ void pairFob(FLASH_DATA *fob_state_ram)
  */
 void enableFeature(FLASH_DATA *fob_state_ram)
 {
-    if (fob_state_ram->paired == FLASH_PAIRED)
+    if (fob_state_ram->paired != FLASH_PAIRED)
     {
-        uint8_t uart_buffer[20];
-        uart_readline(HOST_UART, uart_buffer);
-
-        ENABLE_PACKET *enable_message = (ENABLE_PACKET *)uart_buffer;
-        if (strcmp((char *)fob_state_ram->pair_info.car_id,
-                   (char *)enable_message->car_id))
-        {
-            return;
-        }
-
-        // Feature list full
-        if (fob_state_ram->feature_info.num_active == NUM_FEATURES)
-        {
-            return;
-        }
-
-        // Search for feature in list
-        for (int i = 0; i < fob_state_ram->feature_info.num_active; i++)
-        {
-            if (fob_state_ram->feature_info.features[i] == enable_message->feature)
-            {
-                return;
-            }
-        }
-
-        fob_state_ram->feature_info
-            .features[fob_state_ram->feature_info.num_active] =
-            enable_message->feature;
-        fob_state_ram->feature_info.num_active++;
-
-        saveFobState(fob_state_ram);
-        uart_write(HOST_UART, (uint8_t *)"Enabled", 7);
+        return;
     }
+    // Create a message struct variable for receiving data
+    MESSAGE_PACKET message;
+    uint8_t buffer[256];
+    message.buffer = buffer;
+
+    message.magic = (uint8_t)uart_readb(HOST_UART);
+
+    if (message.magic != ENABLE_MAGIC)
+    {
+        return;
+    }
+
+    message.message_len = (uint8_t)uart_readb(HOST_UART);
+    uart_read(HOST_UART, message.buffer, message.message_len);
+
+    ENABLE_PACKET *packet = (ENABLE_PACKET *)message.buffer;
+    uint8_t *signature = message.buffer + sizeof(ENABLE_PACKET);
+
+    int ret = 0;
+    mbedtls_pk_context pk;
+
+    uint8_t eeprom_feature_pub_key[EEPROM_FEATURE_PUB_SIZE] = {0};
+    // Read public key from EEPROM
+    EEPROMRead((uint32_t *)eeprom_feature_pub_key, FEATURE_EEPROM_PUB_KEY_LOC,
+               EEPROM_FEATURE_PUB_SIZE);
+
+    // Hash the enable packet
+    unsigned char hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), packet,
+                     sizeof(ENABLE_PACKET), hash);
+    if (ret != 0)
+    {
+        return;
+    }
+
+    // Parse public key
+    mbedtls_pk_init(&pk);
+    ret = mbedtls_pk_parse_public_key(&pk, eeprom_feature_pub_key, FEATURE_PUB_KEY_SIZE);
+    if (ret != 0)
+    {
+        goto cleanup;
+    }
+
+    // Verify the signature
+    // ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, sizeof(hash), signature, sizeof(signature));
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, 64);
+    if (ret != 0)
+    {
+        goto cleanup;
+    }
+
+    // Check if the car id is correct
+    if (fob_state_ram->pair_info.car_id != packet->car_id)
+    {
+        goto cleanup;
+    }
+
+    // Feature list full
+    if (fob_state_ram->feature_info.num_active == NUM_FEATURES)
+    {
+        goto cleanup;
+    }
+
+    // Search for feature in list
+    for (int i = 0; i < fob_state_ram->feature_info.num_active; i++)
+    {
+        if (fob_state_ram->feature_info.features[i] == packet->feature)
+        {
+            goto cleanup;
+        }
+    }
+
+    fob_state_ram->feature_info.features[fob_state_ram->feature_info.num_active] = packet->feature;
+    fob_state_ram->feature_info.num_active++;
+
+    saveFobState(fob_state_ram);
+    uart_write(HOST_UART, (uint8_t *)"Enabled", 7);
+    goto cleanup;
+
+cleanup:
+    mbedtls_pk_free(&pk);
+    return;
 }
 
 /**
@@ -376,7 +429,7 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
     memcpy(challenge, message.buffer, sizeof(challenge));
 
     int ret = 0;
-    uint8_t eeprom_unlock_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
+    uint8_t eeprom_unlock_priv_key[EEPROM_UNLOCK_PRIV_SIZE] = {0};
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
@@ -384,7 +437,7 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
 
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
-               EEPROM_PAIRING_PRIV_SIZE);
+               EEPROM_UNLOCK_PRIV_SIZE);
 
     ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
@@ -444,14 +497,14 @@ void startCar(FLASH_DATA *fob_state_ram)
 
     int ret = 0;
     mbedtls_pk_context pk;
-    uint8_t eeprom_unlock_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
+    uint8_t eeprom_unlock_priv_key[EEPROM_UNLOCK_PRIV_SIZE] = {0};
 
     mbedtls_pk_init(&pk);
     drng_seed();
 
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
-               EEPROM_PAIRING_PRIV_SIZE);
+               EEPROM_UNLOCK_PRIV_SIZE);
 
     // Parse private key
     ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,

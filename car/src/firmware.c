@@ -40,7 +40,7 @@
 // Structure of start_car packet FEATURE_DATA
 typedef struct
 {
-    uint8_t car_id[8];
+    uint8_t car_id;
     uint8_t num_active;
     uint8_t features[NUM_FEATURES];
 } FEATURE_DATA;
@@ -77,7 +77,7 @@ void sendAckFailure(void);
 
 // Declare password
 const uint8_t pass[] = PASSWORD;
-const uint8_t car_id[] = CAR_ID;
+const uint8_t car_id = CAR_ID;
 
 /**
  * @brief Main function for the car example
@@ -281,7 +281,7 @@ void startCar(void)
     mbedtls_pk_free(&pk);
 
     // Verify correct car id
-    if (strcmp((char *)car_id, (char *)feature_info->car_id))
+    if (car_id == feature_info->car_id)
     {
         return;
     }
