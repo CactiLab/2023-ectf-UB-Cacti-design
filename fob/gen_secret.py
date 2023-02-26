@@ -12,10 +12,11 @@
 #
 # @copyright Copyright (c) 2023 The MITRE Corporation
 
-import json
+import array
 import argparse
 from pathlib import Path
 from mbedtls import pk
+from mbedtls import hashlib
 
 EEPROM_FEATURE_PUB_SIZE = 96
 EEPROM_PAIRING_PUB_SIZE = 96
@@ -41,6 +42,12 @@ def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
     # Save the private key to a file
     with open(private_key_file, "wb") as f:
         f.write(rsa.export_key(format="DER"))
+
+
+def generate_hashed_pin(pin, image_pairing_pub_key_data):
+    m = hashlib.sha256(bytes(pin, 'utf-8') + image_pairing_pub_key_data)
+    print("Hashed pin: " + m.hexdigest())  # TODO: Remove
+    return array.array('B', m.digest())
 
 
 def main():
@@ -73,20 +80,27 @@ def main():
         image_unlock_priv_key_data = unlock_priv_key_data.ljust(EEPROM_UNLOCK_PRIV_SIZE, b'\xff')
 
         eeprom_data += image_unlock_priv_key_data
+        
+        arr = generate_hashed_pin(args.pair_pin, image_pairing_pub_key_data)
 
         # Paired, write the secrets to the header file
         with open(args.header_file, "w") as fp:
             fp.write("#ifndef __FOB_SECRETS__\n")
             fp.write("#define __FOB_SECRETS__\n\n")
+            fp.write('#include <stdint.h>\n\n')
             fp.write("#define PAIRED 1\n")
-            fp.write(f'#define PAIR_PIN "{args.pair_pin}"\n')
+            fp.write('const uint8_t PAIRING_PIN_HASH[32] = {\n')
+            for i in range(0, len(arr), 16):
+                chunk = arr[i:i+16]
+                hex_str = ', '.join([f'0x{b:02x}' for b in chunk])
+                fp.write(f'    {hex_str},\n')
+            fp.write('};\n\n')
             fp.write(f'#define CAR_ID {args.car_id}\n')
             fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n\n")
             fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")
             fp.write(f"#define UNLOCK_PRIV_KEY_SIZE {unlock_priv_key_size}\n\n")
             fp.write(f"#define PAIRING_PRIV_KEY_SIZE 0\n\n")
-            fp.write('#define PASSWORD "unlock"\n\n')
-            fp.write("#endif\n")
+            fp.write("#endif // __FOB_SECRETS__\n")
     else:
         pairing_priv_key_data = args.pairing_priv_file.read_bytes()
         pairing_priv_key_size = len(pairing_priv_key_data)
@@ -98,15 +112,15 @@ def main():
         with open(args.header_file, "w") as fp:
             fp.write("#ifndef __FOB_SECRETS__\n")
             fp.write("#define __FOB_SECRETS__\n\n")
+            fp.write('#include <stdint.h>\n\n')
             fp.write("#define PAIRED 0\n")
-            fp.write('#define PAIR_PIN "000000"\n')
+            fp.write('const uint8_t PAIRING_PIN_HASH[32] = {0\}\n\n')
             fp.write('#define CAR_ID 0\n')
             fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n\n")
             fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")
             fp.write(f"#define UNLOCK_PRIV_KEY_SIZE 0\n\n")
             fp.write(f"#define PAIRING_PRIV_KEY_SIZE {pairing_priv_key_size}\n\n")
-            fp.write('#define PASSWORD "unlock"\n\n')
-            fp.write("#endif\n")
+            fp.write("#endif // __FOB_SECRETS__\n")
 
     # Write the key data to the EEPROM file
     args.eeprom_file.write_bytes(eeprom_data)

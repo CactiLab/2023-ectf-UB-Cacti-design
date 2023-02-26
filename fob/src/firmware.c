@@ -58,7 +58,7 @@ typedef struct
 typedef struct
 {
     uint8_t car_id;
-    uint8_t password[8];
+    // uint8_t password[8];
     uint8_t pin[8];
     uint16_t unlock_priv_key_size;
 } PAIR_PACKET;
@@ -129,7 +129,7 @@ int main(void)
 #if PAIRED == 1
     if (fob_state_flash->paired != FLASH_PAIRED)
     {
-        strcpy((char *)(fob_state_ram.pair_info.password), PASSWORD);
+        // strcpy((char *)(fob_state_ram.pair_info.password), PASSWORD);
         strcpy((char *)(fob_state_ram.pair_info.pin), PAIR_PIN);
         // strcpy((char *)(fob_state_ram.pair_info.car_id), CAR_ID);
         // strcpy((char *)(fob_state_ram.feature_info.car_id), CAR_ID);
@@ -253,11 +253,32 @@ void pairFob(FLASH_DATA *fob_state_ram)
     // Start pairing transaction - fob is already paired
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
-        int16_t bytes_read;
-        uint8_t uart_buffer[8];
-        uart_write(HOST_UART, (uint8_t *)"Enter pin: ", 11);
-        bytes_read = uart_readline(HOST_UART, uart_buffer);
+        int ret = 0;
+        uint8_t bytes_read;
+        uint8_t pin_buffer[6 + EEPROM_PAIRING_PUB_SIZE] = {0};
+        // uart_write(HOST_UART, (uint8_t *)"Enter pin: ", 11);
+        bytes_read = uart_read(HOST_UART, pin_buffer, 6);
 
+        if (bytes_read != 6)
+        {
+            return;
+        }
+
+        // Read public pairing key from EEPROM
+        EEPROMRead((uint32_t *)((uint8_t *)pin_buffer + 6), PAIRING_EEPROM_PUB_KEY_LOC,
+                EEPROM_PAIRING_PUB_SIZE);
+
+        unsigned char hash[32] = {0};
+        ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), pin_buffer,
+                        sizeof(pin_buffer), hash);
+        if (ret != 0)
+        {
+            while (1)
+            {
+            }
+        }
+
+/*
         if (bytes_read == 6)
         {
             // If the pin is correct
@@ -272,6 +293,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 send_board_message(&message);
             }
         }
+*/
     }
 
     // Start pairing transaction - fob is not paired
