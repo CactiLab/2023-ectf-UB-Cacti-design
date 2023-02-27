@@ -14,6 +14,7 @@
 #define OUTPUT_SIZE 32
 // #define ENBALE_DRBG
 // #define ENABLE_MPU
+#define AES_KEY_SIZE 32
 
 #define EEPROM_FEATURE_PUB_SIZE 96
 #define EEPROM_PAIRING_PUB_SIZE 96
@@ -30,7 +31,7 @@ void mpu_init();
 void dwt_init(void);
 int ctr_drbg_dwt_entropy(void *data, unsigned char *buf, size_t len);
 int drng_init(void);
-int drng_seed(void);
+int drng_seed(char *pers);
 int drng_free(void);
 
 #endif // CONSTANT_H

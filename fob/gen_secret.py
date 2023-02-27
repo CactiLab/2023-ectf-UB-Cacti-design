@@ -46,8 +46,9 @@ def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
 
 def generate_hashed_pin(pin, image_pairing_pub_key_data):
     m = hashlib.sha256(bytes(pin, 'utf-8') + image_pairing_pub_key_data)
-    print("Hashed pin: " + m.hexdigest())  # TODO: Remove
-    return array.array('B', m.digest())
+    hash = m.digest()
+    print("Hashed pin: " + bytes.hex(hash))  # TODO: Remove
+    return array.array('B', hash)
 
 
 def main():
@@ -88,17 +89,17 @@ def main():
             fp.write("#ifndef __FOB_SECRETS__\n")
             fp.write("#define __FOB_SECRETS__\n\n")
             fp.write('#include <stdint.h>\n\n')
-            fp.write("#define PAIRED 1\n")
+            fp.write("#define PAIRED 1\n\n")
             fp.write('const uint8_t PAIRING_PIN_HASH[32] = {\n')
             for i in range(0, len(arr), 16):
                 chunk = arr[i:i+16]
                 hex_str = ', '.join([f'0x{b:02x}' for b in chunk])
                 fp.write(f'    {hex_str},\n')
             fp.write('};\n\n')
-            fp.write(f'#define CAR_ID {args.car_id}\n')
-            fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n\n")
-            fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")
-            fp.write(f"#define UNLOCK_PRIV_KEY_SIZE {unlock_priv_key_size}\n\n")
+            fp.write(f'#define CAR_ID {args.car_id}\n\n')
+            fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n")
+            fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n")
+            fp.write(f"#define UNLOCK_PRIV_KEY_SIZE {unlock_priv_key_size}\n")
             fp.write(f"#define PAIRING_PRIV_KEY_SIZE 0\n\n")
             fp.write("#endif // __FOB_SECRETS__\n")
     else:
@@ -112,9 +113,9 @@ def main():
         with open(args.header_file, "w") as fp:
             fp.write("#ifndef __FOB_SECRETS__\n")
             fp.write("#define __FOB_SECRETS__\n\n")
-            fp.write('#include <stdint.h>\n\n')
+            fp.write("#include <stdint.h>\n\n")
             fp.write("#define PAIRED 0\n")
-            fp.write('const uint8_t PAIRING_PIN_HASH[32] = {0\}\n\n')
+            fp.write("const uint8_t PAIRING_PIN_HASH[32] = {0};\n\n")
             fp.write('#define CAR_ID 0\n')
             fp.write(f"#define FEATURE_PUB_KEY_SIZE {feature_pub_key_size}\n\n")
             fp.write(f"#define PAIRING_PUB_KEY_SIZE {pairing_pub_key_size}\n\n")

@@ -28,6 +28,7 @@
 
 #include "secrets.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/aes.h"
 #include "mbedtls/md.h"
 #include "mbedtls/memory_buffer_alloc.h"
 
@@ -54,13 +55,20 @@ typedef struct
     uint8_t token[8];
 } ENABLE_PACKET;
 
-// Defines a struct for the format of a pairing message
+// Defines a struct for the format of a pairing info
 typedef struct
 {
     uint8_t car_id;
-    // uint8_t password[8];
-    uint8_t pin[8];
+    uint8_t pin_hash[32];
     uint16_t unlock_priv_key_size;
+} PAIR_INFO;
+
+// Defines a struct for the format of a pairing packet
+typedef struct
+{
+    PAIR_INFO pair_info;
+    uint8_t unlock_priv_key[EEPROM_UNLOCK_PRIV_SIZE];
+    u_int8_t padding[11];
 } PAIR_PACKET;
 
 // Defines a struct for the format of start message
@@ -75,7 +83,7 @@ typedef struct
 typedef struct
 {
     uint8_t paired;
-    PAIR_PACKET pair_info;
+    PAIR_INFO pair_info;
     FEATURE_DATA feature_info;
 } FLASH_DATA;
 
@@ -87,6 +95,13 @@ typedef struct
     uint8_t signature[128];
 } SIGNED_FEATURE;
 
+// Defines a struct for the format of the AES info
+typedef struct
+{
+    uint8_t key[AES_KEY_SIZE];
+    uint8_t hash[20];
+} AES_INFO;
+
 /*** Macro Definitions ***/
 // Definitions for unlock message location in EEPROM
 #define FEATURE_EEPROM_PUB_KEY_LOC 0x0
@@ -96,7 +111,7 @@ typedef struct
 
 #define UNLOCK_CMD "unlock"
 extern mbedtls_ctr_drbg_context ctr_drbg;
-unsigned char memory_buf[8192];
+uint8_t memory_buf[8192];
 
 /*** Function definitions ***/
 // Core functions - all functionality supported by fob
@@ -130,7 +145,8 @@ int main(void)
     if (fob_state_flash->paired != FLASH_PAIRED)
     {
         // strcpy((char *)(fob_state_ram.pair_info.password), PASSWORD);
-        strcpy((char *)(fob_state_ram.pair_info.pin), PAIR_PIN);
+        // strcpy((char *)(fob_state_ram.pair_info.pin), PAIR_PIN);
+        memcpy(fob_state_ram.pair_info.pin_hash, PAIRING_PIN_HASH, 32);
         // strcpy((char *)(fob_state_ram.pair_info.car_id), CAR_ID);
         // strcpy((char *)(fob_state_ram.feature_info.car_id), CAR_ID);
         fob_state_ram.pair_info.car_id = CAR_ID;
@@ -249,11 +265,13 @@ int main(void)
  */
 void pairFob(FLASH_DATA *fob_state_ram)
 {
+    int ret = 0;
     MESSAGE_PACKET message;
+    mbedtls_pk_context pk;
+    mbedtls_aes_context aes;
     // Start pairing transaction - fob is already paired
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
-        int ret = 0;
         uint8_t bytes_read;
         uint8_t pin_buffer[6 + EEPROM_PAIRING_PUB_SIZE] = {0};
         // uart_write(HOST_UART, (uint8_t *)"Enter pin: ", 11);
@@ -266,39 +284,171 @@ void pairFob(FLASH_DATA *fob_state_ram)
 
         // Read public pairing key from EEPROM
         EEPROMRead((uint32_t *)((uint8_t *)pin_buffer + 6), PAIRING_EEPROM_PUB_KEY_LOC,
-                EEPROM_PAIRING_PUB_SIZE);
+                   EEPROM_PAIRING_PUB_SIZE);
 
-        unsigned char hash[32] = {0};
+        uint8_t hash[32] = {0};
         ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), pin_buffer,
-                        sizeof(pin_buffer), hash);
+                         sizeof(pin_buffer), hash);
         if (ret != 0)
         {
             while (1)
-            {
-            }
+                ;
         }
 
-/*
-        if (bytes_read == 6)
+        // Compare hash with stored hash
+        if (memcmp(hash, fob_state_ram->pair_info.pin_hash, 32) == 0)
         {
-            // If the pin is correct
-            if (!(strcmp((char *)uart_buffer,
-                         (char *)fob_state_ram->pair_info.pin)))
-            {
-                // Pair the new key by sending a PAIR_PACKET structure
-                // with required information to unlock door
-                message.message_len = sizeof(PAIR_PACKET);
-                message.magic = PAIR_MAGIC;
-                message.buffer = (uint8_t *)&fob_state_ram->pair_info;
-                send_board_message(&message);
-            }
-        }
-*/
-    }
+            int ret = 0;
 
+            PAIR_PACKET pair_packet;
+            memcpy(&pair_packet.pair_info, &fob_state_ram->pair_info, sizeof(PAIR_INFO));
+
+            // Load unlock private key to pair_packet
+            EEPROMRead((uint32_t *)pair_packet.unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
+                       EEPROM_UNLOCK_PRIV_SIZE);
+
+            AES_INFO aes_info;
+            drng_seed("aes generate key");
+            ret = mbedtls_ctr_drbg_random(&ctr_drbg, aes_info.key, AES_KEY_SIZE);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+
+            uint8_t ciphertext_iv[sizeof(PAIR_PACKET) + 16] = {0};
+            ret = mbedtls_ctr_drbg_random(&ctr_drbg, ciphertext_iv + sizeof(PAIR_PACKET), 16);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+
+            size_t input_len = ((sizeof(PAIR_PACKET) + 15) / 16) * 16;
+            // size_t input_len = sizeof(PAIR_PACKET);
+            uint8_t iv[16] = {0};
+            memcpy(iv, ciphertext_iv + sizeof(PAIR_PACKET), 16);
+
+            mbedtls_aes_init(&aes);
+            ret = mbedtls_aes_setkey_enc(&aes, aes_info.key, 256);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+            ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, input_len, iv, (uint8_t *)&pair_packet, ciphertext_iv);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+            mbedtls_aes_free(&aes);
+
+            // Make a hash over the ciphertext and iv
+            ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), ciphertext_iv,
+                             sizeof(ciphertext_iv), aes_info.hash);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+
+            /*
+            uint8_t plaintext[sizeof(PAIR_PACKET)] = {0};
+            mbedtls_aes_init(&aes);
+            ret = mbedtls_aes_setkey_dec(&aes, aes_info.key, 256);
+            if (ret != 0)
+            {
+                return;
+            }
+            ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, input_len, aes_info.iv, ciphertext, plaintext);
+            if (ret != 0)
+            {
+                return;
+            }
+
+            PAIR_PACKET *pair_packet_ptr = (PAIR_PACKET *)plaintext;
+
+            mbedtls_aes_free(&aes);
+            */
+
+            mbedtls_pk_init(&pk);
+            // Parse pairing public key
+            ret = mbedtls_pk_parse_public_key(&pk, ((uint8_t *)pin_buffer + 6), PAIRING_PUB_KEY_SIZE);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+
+            // Encrypt AES key and hash with pairing public key
+            uint8_t aes_info_cipher[64] = {0};
+            size_t olen = 0;
+            drng_seed("encrypt aes");
+            ret = mbedtls_pk_encrypt(&pk, (const uint8_t *)&aes_info, sizeof(AES_INFO),
+                                     aes_info_cipher, &olen, sizeof(aes_info_cipher),
+                                     mbedtls_ctr_drbg_random, &ctr_drbg);
+            if (ret != 0)
+            {
+                while (1)
+                    ;
+            }
+            mbedtls_pk_free(&pk);
+
+            // Pair the new key by sending a PAIR_INFO structure
+            // with required information to unlock door
+            message.message_len = sizeof(aes_info_cipher);
+            message.magic = PAIR_MAGIC;
+            message.buffer = aes_info_cipher;
+            send_board_message(&message);
+        }
+        else
+        {
+            for (int i = 0; i < 80000000 * 5; i++)
+                ;
+        }
+    }
     // Start pairing transaction - fob is not paired
     else
     {
+        uint8_t buffer[256];
+        message.buffer = buffer;
+        receive_board_message_by_type(&message, PAIR_MAGIC);
+
+        if (message.message_len != 64)
+        {
+            return;
+        }
+
+        // Read pairing private key from EEPROM
+        uint8_t eeprom_pairing_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
+        EEPROMRead((uint32_t *)eeprom_pairing_priv_key, PAIRING_EEPROM_PRIV_KEY_LOC,
+                   EEPROM_PAIRING_PRIV_SIZE);
+
+        mbedtls_pk_init(&pk);
+        drng_seed("decrypt aes info");
+        // Parse private key
+        ret = mbedtls_pk_parse_key(&pk, eeprom_pairing_priv_key, PAIRING_PRIV_KEY_SIZE, NULL, 0,
+                                   mbedtls_ctr_drbg_random, &ctr_drbg);
+        if (ret != 0)
+        {
+            while (1)
+                ;
+        }
+
+        // Decrypt message with private key
+        AES_INFO aes_info;
+        size_t olen = 0;
+
+        ret = mbedtls_pk_decrypt(&pk, message.buffer, message.message_len, (uint8_t *)&aes_info,
+                                 &olen, sizeof(AES_INFO), mbedtls_ctr_drbg_random, &ctr_drbg);
+        if (ret != 0)
+        {
+            while (1)
+                ;
+        }
+
+        /*
         // TODO: Vulnerable to buffer overflow
         message.buffer = (uint8_t *)&fob_state_ram->pair_info;
         receive_board_message_by_type(&message, PAIR_MAGIC);
@@ -309,6 +459,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
         uart_write(HOST_UART, (uint8_t *)"Paired", 6);
 
         saveFobState(fob_state_ram);
+        */
     }
 }
 
@@ -350,8 +501,8 @@ void enableFeature(FLASH_DATA *fob_state_ram)
                EEPROM_FEATURE_PUB_SIZE);
 
     // Hash the enable packet
-    unsigned char hash[32] = {0};
-    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), packet,
+    uint8_t hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), (uint8_t *)packet,
                      sizeof(ENABLE_PACKET), hash);
     if (ret != 0)
     {
@@ -442,7 +593,7 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
     message.buffer = buffer;
     receive_board_message_by_type(&message, CHALLENGE_MAGIC);
 
-    unsigned char challenge[32] = {0};
+    uint8_t challenge[32] = {0};
     if (message.message_len != sizeof(challenge))
     {
         return 0;
@@ -455,13 +606,13 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
-    drng_seed();
+    drng_seed("sign challenge");
 
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
                EEPROM_UNLOCK_PRIV_SIZE);
 
-    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
+    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, fob_state_ram->pair_info.unlock_priv_key_size, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0)
     {
@@ -471,7 +622,7 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
     }
 
     // Hash the challenge
-    unsigned char hash[32] = {0};
+    uint8_t hash[32] = {0};
     ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), challenge,
                      sizeof(challenge), hash);
     if (ret != 0)
@@ -482,7 +633,7 @@ uint8_t recChallengeSendAns(FLASH_DATA *fob_state_ram)
     }
 
     // Sign the hash
-    unsigned char signature[128] = {0};
+    uint8_t signature[128] = {0};
     size_t olen = 0;
     ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
                           &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
@@ -514,7 +665,7 @@ void startCar(FLASH_DATA *fob_state_ram)
 {
     if (fob_state_ram->paired != FLASH_PAIRED)
     {
-        return 0;
+        return;
     }
 
     int ret = 0;
@@ -522,14 +673,14 @@ void startCar(FLASH_DATA *fob_state_ram)
     uint8_t eeprom_unlock_priv_key[EEPROM_UNLOCK_PRIV_SIZE] = {0};
 
     mbedtls_pk_init(&pk);
-    drng_seed();
+    drng_seed("sign feature");
 
     // Read private key from EEPROM
     EEPROMRead((uint32_t *)eeprom_unlock_priv_key, UNLOCK_EEPROM_PRIV_KEY_LOC,
                EEPROM_UNLOCK_PRIV_SIZE);
 
     // Parse private key
-    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, UNLOCK_PRIV_KEY_SIZE, NULL, 0,
+    ret = mbedtls_pk_parse_key(&pk, eeprom_unlock_priv_key, fob_state_ram->pair_info.unlock_priv_key_size, NULL, 0,
                                mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0)
     {
@@ -539,10 +690,10 @@ void startCar(FLASH_DATA *fob_state_ram)
     }
 
     // Hash the feature data
-    unsigned char hash[32] = {0};
+    uint8_t hash[32] = {0};
     FEATURE_DATA *feature_info = (FEATURE_DATA *)&fob_state_ram->feature_info;
 
-    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), feature_info,
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), (uint8_t *)feature_info,
                      sizeof(FEATURE_DATA), hash);
     if (ret != 0)
     {
@@ -552,7 +703,7 @@ void startCar(FLASH_DATA *fob_state_ram)
     }
 
     // Sign feature hash
-    unsigned char signature[128] = {0};
+    uint8_t signature[128] = {0};
     size_t olen = 0;
     ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
                           &olen, mbedtls_ctr_drbg_random, &ctr_drbg);

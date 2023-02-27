@@ -76,7 +76,6 @@ void sendAckSuccess(void);
 void sendAckFailure(void);
 
 // Declare password
-const uint8_t pass[] = PASSWORD;
 const uint8_t car_id = CAR_ID;
 
 /**

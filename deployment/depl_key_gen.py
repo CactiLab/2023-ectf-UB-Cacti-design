@@ -19,8 +19,8 @@ def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate RSA key pairs and save as JSON")
-    parser.add_argument("folder_path", type=str, help="Folder path to save key pairs JSON")
+    parser = argparse.ArgumentParser(description="Generate RSA key pairs and save as DER")
+    parser.add_argument("folder_path", type=str, help="Folder path to save key pairs DER")
 
     args = parser.parse_args()
     generate_rsa_key_pair(512, 
