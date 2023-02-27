@@ -24,12 +24,15 @@
 
 #define ACK_MAGIC 0x54
 #define PAIR_MAGIC 0x55
-#define UNLOCK_MAGIC 0x56
-#define CHALLENGE_MAGIC 0x57
-#define ANSWER_MAGIC 0x58
+#define PAIR_DATA_MAGIC 0x56
+#define UNLOCK_MAGIC 0x57
+#define CHALLENGE_MAGIC 0x58
+#define ANSWER_MAGIC 0x59
 #define START_MAGIC 0x60
 #define ENABLE_MAGIC 0x61
 #define BOARD_UART ((uint32_t)UART1_BASE)
+
+#define PAIR_DATA_LEN 384
 
 /**
  * @brief Structure for message between boards
@@ -73,5 +76,22 @@ uint32_t receive_board_message(MESSAGE_PACKET *message);
  * @return uint32_t the number of bytes received
  */
 uint32_t receive_board_message_by_type(MESSAGE_PACKET *message, uint8_t type);
+
+/**
+ * @brief Send pairing data between boards
+ *
+ * @param data pointer to data to send
+ * @return uint32_t the number of bytes sent
+ */
+uint32_t send_pairing_data(uint8_t *data);
+
+/**
+ * @brief Receive the pairing data between boards
+ *
+ * @param message pointer to message where data will be received
+ * @return uint32_t the number of bytes received - 0 for error
+ */
+uint32_t receive_pairing_data(uint8_t *data);
+
 
 #endif

@@ -112,3 +112,52 @@ uint32_t receive_board_message_by_type(MESSAGE_PACKET *message, uint8_t type)
 
     return message->message_len;
 }
+
+/**
+ * @brief Send pairing data between boards
+ *
+ * @param data pointer to data to send
+ * @return uint32_t the number of bytes sent
+ */
+uint32_t send_pairing_data(uint8_t *data)
+{
+    UARTCharPut(BOARD_UART, PAIR_DATA_MAGIC);
+    UARTCharPut(BOARD_UART, 0xFF);
+
+    for (int i = 0; i < PAIR_DATA_LEN; i++)
+    {
+        UARTCharPut(BOARD_UART, data[i]);
+    }
+
+    return PAIR_DATA_LEN;
+}
+
+/**
+ * @brief Receive the pairing data between boards
+ *
+ * @param message pointer to message where data will be received
+ * @return uint32_t the number of bytes received - 0 for error
+ */
+uint32_t receive_pairing_data(uint8_t *data)
+{
+    uint8_t magic = (uint8_t)UARTCharGet(BOARD_UART);
+
+    if (magic != PAIR_DATA_MAGIC)
+    {
+        return 0;
+    }
+
+    uint8_t message_len = (uint8_t)UARTCharGet(BOARD_UART);
+
+    if (message_len != 0xFF)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < PAIR_DATA_LEN; i++)
+    {
+        data[i] = (uint8_t)UARTCharGet(BOARD_UART);
+    }
+
+    return PAIR_DATA_LEN;
+}

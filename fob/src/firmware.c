@@ -138,7 +138,7 @@ int main(void)
     FLASH_DATA fob_state_ram;
     FLASH_DATA *fob_state_flash = (FLASH_DATA *)FOB_STATE_PTR;
 
-    memset(&fob_state_ram, 0, sizeof(FLASH_DATA));
+    memset(&fob_state_ram, 0xFF, sizeof(FLASH_DATA));
 
 // If paired fob, initialize the system information
 #if PAIRED == 1
@@ -336,7 +336,8 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 while (1)
                     ;
             }
-            ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, input_len, iv, (uint8_t *)&pair_packet, ciphertext_iv);
+            ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, input_len,
+                                        iv, (uint8_t *)&pair_packet, ciphertext_iv);
             if (ret != 0)
             {
                 while (1)
@@ -352,25 +353,6 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 while (1)
                     ;
             }
-
-            /*
-            uint8_t plaintext[sizeof(PAIR_PACKET)] = {0};
-            mbedtls_aes_init(&aes);
-            ret = mbedtls_aes_setkey_dec(&aes, aes_info.key, 256);
-            if (ret != 0)
-            {
-                return;
-            }
-            ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, input_len, aes_info.iv, ciphertext, plaintext);
-            if (ret != 0)
-            {
-                return;
-            }
-
-            PAIR_PACKET *pair_packet_ptr = (PAIR_PACKET *)plaintext;
-
-            mbedtls_aes_free(&aes);
-            */
 
             mbedtls_pk_init(&pk);
             // Parse pairing public key
@@ -401,6 +383,8 @@ void pairFob(FLASH_DATA *fob_state_ram)
             message.magic = PAIR_MAGIC;
             message.buffer = aes_info_cipher;
             send_board_message(&message);
+
+            send_pairing_data(ciphertext_iv);
         }
         else
         {
@@ -412,13 +396,14 @@ void pairFob(FLASH_DATA *fob_state_ram)
     else
     {
         uint8_t buffer[256];
+        uint8_t ciphertext_iv[PAIR_DATA_LEN];
         message.buffer = buffer;
-        receive_board_message_by_type(&message, PAIR_MAGIC);
-
-        if (message.message_len != 64)
+        if (receive_board_message_by_type(&message, PAIR_MAGIC) != 64)
         {
             return;
         }
+
+        receive_pairing_data(ciphertext_iv);
 
         // Read pairing private key from EEPROM
         uint8_t eeprom_pairing_priv_key[EEPROM_PAIRING_PRIV_SIZE] = {0};
@@ -439,27 +424,52 @@ void pairFob(FLASH_DATA *fob_state_ram)
         // Decrypt message with private key
         AES_INFO aes_info;
         size_t olen = 0;
-
         ret = mbedtls_pk_decrypt(&pk, message.buffer, message.message_len, (uint8_t *)&aes_info,
                                  &olen, sizeof(AES_INFO), mbedtls_ctr_drbg_random, &ctr_drbg);
+        if (ret != 0)
+        {
+            return;
+        }
+
+        uint8_t hash[20] = {0};
+        // Make a hash over the ciphertext and iv
+        ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), ciphertext_iv,
+                         sizeof(ciphertext_iv), hash);
         if (ret != 0)
         {
             while (1)
                 ;
         }
 
-        /*
-        // TODO: Vulnerable to buffer overflow
-        message.buffer = (uint8_t *)&fob_state_ram->pair_info;
-        receive_board_message_by_type(&message, PAIR_MAGIC);
-        fob_state_ram->paired = FLASH_PAIRED;
-        strcpy((char *)fob_state_ram->feature_info.car_id,
-               (char *)fob_state_ram->pair_info.car_id);
+        if (memcmp(hash, aes_info.hash, 20) == 0)
+        {
+            PAIR_PACKET pair_packet;
+            size_t input_len = ((sizeof(PAIR_PACKET) + 15) / 16) * 16;
+            mbedtls_aes_init(&aes);
+            ret = mbedtls_aes_setkey_dec(&aes, aes_info.key, 256);
+            if (ret != 0)
+            {
+                return;
+            }
+            ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, input_len,
+                                        ciphertext_iv + sizeof(PAIR_PACKET),
+                                        ciphertext_iv, (uint8_t *)&pair_packet);
+            if (ret != 0)
+            {
+                return;
+            }
+            mbedtls_aes_free(&aes);
 
-        uart_write(HOST_UART, (uint8_t *)"Paired", 6);
+            fob_state_ram->paired = FLASH_PAIRED;
+            EEPROMProgram((uint32_t *)pair_packet.unlock_priv_key,
+                          UNLOCK_EEPROM_PRIV_KEY_LOC, EEPROM_UNLOCK_PRIV_SIZE);
+            memcpy(&fob_state_ram->pair_info, &pair_packet.pair_info, sizeof(PAIR_INFO));
+            fob_state_ram->feature_info.car_id = fob_state_ram->pair_info.car_id;
 
-        saveFobState(fob_state_ram);
-        */
+            uart_write(HOST_UART, (uint8_t *)"Paired", 6);
+            saveFobState(fob_state_ram);
+        }
+        mbedtls_pk_free(&pk);
     }
 }
 
