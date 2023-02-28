@@ -12,6 +12,7 @@
 #
 # @copyright Copyright (c) 2023 The MITRE Corporation
 
+import sys
 import socket
 import argparse
 
@@ -35,14 +36,14 @@ def unlock(car_bridge):
             byte = car_sock.recv(1)
             unlock_received += 1
             print(byte.decode("utf-8"), end="")
-            
+
         except socket.timeout:
             print("Socket timeout - finished receiving")
             break
 
     # If no data receive, unlock failed
     if unlock_received == 0:
-        print("Failed to unlock")
+        sys.exit("Failed to unlock")
     # If data received, print out unlock message and features
     else:
         print(unlock_received)

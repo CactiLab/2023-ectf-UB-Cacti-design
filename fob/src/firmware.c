@@ -143,6 +143,8 @@ int main(void)
 
         saveFobState(&fob_state_ram);
     }
+#else
+    fob_state_ram.paired = FLASH_UNPAIRED;
 #endif
 
     if (fob_state_flash->paired == FLASH_PAIRED)
@@ -184,6 +186,11 @@ int main(void)
     GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
     GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_4MA,
                      GPIO_PIN_TYPE_STD_WPU);
+
+    // Change LED color: white
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1); // r
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, GPIO_PIN_2); // b
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // g
 
     // Declare a buffer for reading and writing to UART
     uint8_t uart_buffer[10];
@@ -255,11 +262,10 @@ void pairFob(FLASH_DATA *fob_state_ram)
     // Start pairing transaction - fob is already paired
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
-        uint8_t bytes_read;
         uint8_t pin_buffer[6 + EEPROM_PAIRING_PUB_SIZE] = {0};
-        bytes_read = uart_read(HOST_UART, pin_buffer, 6);
+        uart_write(HOST_UART, (uint8_t *)"P", 1);
 
-        if (bytes_read != 6)
+        if (uart_read(HOST_UART, pin_buffer, 6) != 6)
         {
             return;
         }
@@ -559,7 +565,7 @@ void sendUnlock(FLASH_DATA *fob_state_ram)
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
         MESSAGE_PACKET message;
-        message.message_len = 6;
+        message.message_len = 0;
         message.magic = UNLOCK_MAGIC;
         message.buffer = NULL;
         send_board_message(&message);
@@ -641,7 +647,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
 
         // Hash the feature data
         memcpy(&signed_feature.feature_info, &fob_state_ram->feature_info, sizeof(FEATURE_DATA));
-        ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), &signed_feature.feature_info,
+        ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), (uint8_t *)&signed_feature.feature_info,
                          sizeof(FEATURE_DATA), hash);
         if (ret != 0)
         {
@@ -651,7 +657,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
 
         // Sign feature hash
         size_t olen = 0;
-        ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, &signed_feature.signature, 64,
+        ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, (uint8_t *)&signed_feature.signature, 64,
                               &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
         if (ret != 0 || olen != 64)
         {

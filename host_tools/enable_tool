@@ -13,6 +13,7 @@
 # @copyright Copyright (c) 2023 The MITRE Corporation
 
 import os
+import sys
 import socket
 import argparse
 from pathlib import Path
@@ -55,7 +56,7 @@ def enable(fob_bridge, package_name, package_dir):
 
         print(enable_success)
     except socket.timeout:
-        print("Failed to enable feature")
+        sys.exit("Failed to enable feature")
 
     return 0
 

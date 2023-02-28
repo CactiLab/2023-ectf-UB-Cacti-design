@@ -79,6 +79,11 @@ int main(void)
     SysCtlPeripheralEnable(SYSCTL_PERIPH_EEPROM0);
     EEPROMInit();
 
+    // Change LED color: red
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_PIN_1); // r
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);          // b
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0);          // g
+
     // Initialize UART peripheral
     uart_init();
 
@@ -119,7 +124,11 @@ bool sendChallenge(void)
     message.buffer = buffer;
 
     // Receive packet with some error checking
-    receive_board_message_by_type(&message, UNLOCK_MAGIC);
+    ret = receive_board_message_by_type(&message, UNLOCK_MAGIC);
+    if (ret != 0)
+    {
+        return false;
+    }
 
     // Generate challenge
     memset(challenge, 0, sizeof(challenge));
@@ -132,7 +141,6 @@ bool sendChallenge(void)
         message.magic = CHALLENGE_MAGIC;
         message.buffer = (uint8_t *)&challenge;
         send_board_message(&message);
-        // uart_write(HOST_UART, (uint8_t *)"challenge_sent\n", sizeof("challenge_sent\n"));
 
         return true;
     }
@@ -152,7 +160,6 @@ void receiveAnswerStartCar()
     // Receive packet with some error checking
     if (receive_board_message_by_type(&message, ANSWER_MAGIC) != 64)
     {
-        sendAckFailure();
         return;
     }
 
@@ -235,9 +242,18 @@ void receiveAnswerStartCar()
             {
                 uint8_t eeprom_message[64];
                 uint32_t offset = feature_info->features[i] * FEATURE_SIZE;
+                if (offset > FEATURE_END)
+                {
+                    offset = FEATURE_END;
+                }
                 EEPROMRead((uint32_t *)eeprom_message, FEATURE_END - offset, FEATURE_SIZE);
                 uart_write(HOST_UART, eeprom_message, FEATURE_SIZE);
             }
+
+            // Change LED color: green
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);          // r
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);          // b
+            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // g
         }
     }
     else
