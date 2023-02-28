@@ -14,6 +14,7 @@
 #define OUTPUT_SIZE 32
 // #define ENBALE_DRBG
 // #define ENABLE_MPU
+#define DISABLE_START_VERIFICATION
 
 /*** Macro Definitions ***/
 #define UNLOCK_EEPROM_PUB_KEY_LOC 0x0

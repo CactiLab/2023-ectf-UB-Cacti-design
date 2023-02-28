@@ -212,6 +212,7 @@ void receiveAnswerStartCar()
         // uart_write(HOST_UART, (uint8_t *)"\n", sizeof("\n"));
 
         sendAckSuccess();
+#ifndef DISABLE_START_VERIFICATION
 
         // Receive start message
         if (receive_board_message_by_type(&message, START_MAGIC) == sizeof(SIGNED_FEATURE))
@@ -236,6 +237,17 @@ void receiveAnswerStartCar()
                 mbedtls_pk_free(&pk);
                 return;
             }
+#else
+        if (receive_board_message_by_type(&message, START_MAGIC) == sizeof(FEATURE_DATA))
+        {
+            FEATURE_DATA *feature_info = (FEATURE_DATA *)buffer;
+
+            if (car_id != feature_info->car_id)
+            {
+                mbedtls_pk_free(&pk);
+                return;
+            }
+#endif // DISABLE_START_VERIFICATION
 
             // Print out features for all active features
             for (int i = 0; i < feature_info->num_active; i++)

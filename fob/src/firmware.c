@@ -642,6 +642,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
 
     if (receiveAck())
     {
+#ifndef DISABLE_START_VERIFICATION
         SIGNED_FEATURE signed_feature;
         drng_seed("sign challenge");
 
@@ -669,6 +670,12 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
         message.message_len = sizeof(signed_feature);
         message.buffer = (uint8_t *)&signed_feature;
         send_board_message(&message);
+#else
+        message.magic = START_MAGIC;
+        message.message_len = sizeof(FEATURE_DATA);
+        message.buffer = (uint8_t *)&fob_state_ram->feature_info;
+        send_board_message(&message);
+#endif // DISABLE_START_VERIFICATION
     }
 
     mbedtls_pk_free(&pk);
