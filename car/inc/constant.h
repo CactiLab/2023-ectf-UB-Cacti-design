@@ -15,6 +15,16 @@
 // #define ENBALE_DRBG
 // #define ENABLE_MPU
 
+/*** Macro Definitions ***/
+#define UNLOCK_EEPROM_PUB_KEY_LOC 0x0
+#define EEPROM_UNLOCK_PUB_SIZE 96
+
+// Definitions for unlock message location in EEPROM
+#define UNLOCK_EEPROM_LOC 0x7C0
+#define UNLOCK_EEPROM_SIZE 64
+
+
+
 #define DWT_TRACE_ENABLE 0x40000001
 #define ARM_CM_DEMCR (*(uint32_t *)0xE000EDFC)
 #define ARM_CM_DWT_CTRL (*(uint32_t *)0xE0001000)   // DWT->CTRL (core_cm33.h, DWT_Type)
@@ -25,7 +35,7 @@ void mpu_init();
 void dwt_init(void);
 int ctr_drbg_dwt_entropy(void *data, unsigned char *buf, size_t len);
 int drng_init(void);
-int drng_seed(void);
+int drng_seed(char *pers);
 int drng_free(void);
 
 #endif // CONSTANT_H

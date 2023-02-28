@@ -6,7 +6,6 @@
 
 static mbedtls_entropy_context entropy;
 mbedtls_ctr_drbg_context ctr_drbg;
-const char *pers = "fourty-two";
 
 /**
  * @brief  Initialize the DWT
@@ -56,13 +55,13 @@ int drng_init()
 
 /**
  * @brief  Seed the DRNG
- * @param  None
+ * @param  pers: personalization string
  * @retval 0: success
  */
-int drng_seed()
+int drng_seed(char *pers)
 {
     if (mbedtls_ctr_drbg_seed(&ctr_drbg, ctr_drbg_dwt_entropy, &entropy,
-                              (const unsigned char *)pers, strlen(pers)) != 0)
+                              (uint8_t *)pers, strlen(pers)) != 0)
     {
         while (1)
         {

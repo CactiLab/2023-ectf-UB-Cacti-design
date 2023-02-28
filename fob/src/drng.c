@@ -6,7 +6,6 @@
 
 static mbedtls_entropy_context entropy;
 mbedtls_ctr_drbg_context ctr_drbg;
-const char *pers = "fourty-two";
 
 /**
  * @brief  Initialize the DWT
