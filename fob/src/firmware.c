@@ -91,7 +91,6 @@ typedef struct
 typedef struct
 {
     FEATURE_DATA feature_info;
-    // uint8_t signature_size;
     uint8_t signature[64];
 } SIGNED_FEATURE;
 
@@ -592,7 +591,8 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
         return 0;
     }
 
-    uint8_t *challenge = buffer;
+    // The buffer has: CHALLENGE(32), FEATURE_DATA(5)
+    memcpy(buffer + 32, &fob_state_ram->feature_info, sizeof(FEATURE_DATA));
 
     int ret = 0;
     uint8_t eeprom_unlock_priv_key[EEPROM_UNLOCK_PRIV_SIZE] = {0};
@@ -613,10 +613,10 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
             ;
     }
 
-    // Hash the challenge
+    // Hash the challenge and feature info
     uint8_t hash[32] = {0};
     ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
-                     challenge, 32, hash);
+                     buffer, 32 + sizeof(FEATURE_DATA), hash);
     if (ret != 0)
     {
         while (1)
@@ -624,9 +624,10 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
     }
 
     // Sign the hash
-    uint8_t signature[64] = {0};
+    // The buffer has: CHALLENGE(32), FEATURE_DATA(5), SIGNATURE(64)
+    uint8_t *signature = buffer + 32 + sizeof(FEATURE_DATA);
     size_t olen = 0;
-    ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, sizeof(signature),
+    ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, 64,
                           &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0 || olen != 64)
     {
@@ -634,12 +635,13 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
             ;
     }
 
-    // Send the signature
+    // Send the feature info and signature
+    // The message buffer has: FEATURE_DATA(5), SIGNATURE(64)
     message.magic = ANSWER_MAGIC;
-    message.message_len = olen;
-    message.buffer = (uint8_t *)&signature;
+    message.message_len = sizeof(FEATURE_DATA) + 64;
+    message.buffer = buffer + 32;
     send_board_message(&message);
-
+/*
     if (receiveAck())
     {
 #ifndef DISABLE_START_VERIFICATION
@@ -677,7 +679,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
         send_board_message(&message);
 #endif // DISABLE_START_VERIFICATION
     }
-
+*/
     mbedtls_pk_free(&pk);
     return 1;
 }

@@ -155,15 +155,18 @@ void receiveAnswerStartCar()
     // Create a message struct variable for receiving data
     MESSAGE_PACKET message;
     uint8_t buffer[256];
-    message.buffer = buffer;
+    message.buffer = buffer + sizeof(challenge);
 
     // Receive packet with some error checking
-    if (receive_board_message_by_type(&message, ANSWER_MAGIC) != 64)
+    if (receive_board_message_by_type(&message, ANSWER_MAGIC) != sizeof(FEATURE_DATA) + 64)
     {
         return;
     }
 
-    uint8_t *signature = buffer;
+    // The buffer has: CHALLENGE(32), FEATURE_DATA(5), SIGNATURE(64)
+    memcpy(buffer, challenge, sizeof(challenge));
+    memset(challenge, 0, sizeof(challenge));
+    // uint8_t *signature = buffer;
 
     int ret = 0;
     uint8_t eeprom_unlock_pub_key[EEPROM_UNLOCK_PUB_SIZE] = {0};
@@ -181,25 +184,24 @@ void receiveAnswerStartCar()
     if (ret != 0)
     {
         while (1)
-        {
-        }
+            ;
     }
 
-    // Hash the challenge
-    uint8_t *hash = buffer + 64;
-    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), challenge,
-                     sizeof(challenge), hash);
+    // Hash the challenge and feature info
+    uint8_t hash[32] = {0};
+    ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), buffer,
+                     32 + sizeof(FEATURE_DATA), hash);
     if (ret != 0)
     {
         while (1)
-        {
-        }
+            ;
     }
 
-    memset(challenge, 0, sizeof(challenge));
-
     // Verify the signature
+    // The buffer has: CHALLENGE(32), FEATURE_DATA(5), SIGNATURE(64)
+    uint8_t *signature = buffer + 32 + sizeof(FEATURE_DATA);
     ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, 64);
+    mbedtls_pk_free(&pk);
     if (ret == 0)
     {
         uint8_t eeprom_message[64];
@@ -209,72 +211,37 @@ void receiveAnswerStartCar()
 
         // Write out full flag if applicable
         uart_write(HOST_UART, eeprom_message, UNLOCK_EEPROM_SIZE);
-        // uart_write(HOST_UART, (uint8_t *)"\n", sizeof("\n"));
 
-        sendAckSuccess();
-#ifndef DISABLE_START_VERIFICATION
+        FEATURE_DATA *feature_info = (FEATURE_DATA *)(buffer + 32);
 
-        // Receive start message
-        if (receive_board_message_by_type(&message, START_MAGIC) == sizeof(SIGNED_FEATURE))
+        // Check if car ID matches
+        if (car_id != feature_info->car_id)
         {
-            SIGNED_FEATURE *signed_feature = (SIGNED_FEATURE *)buffer;
-            FEATURE_DATA *feature_info = &signed_feature->feature_info;
-
-            // Hash the feature info
-            hash = buffer + sizeof(SIGNED_FEATURE);
-            ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), feature_info,
-                             sizeof(FEATURE_DATA), hash);
-            if (ret != 0)
-            {
-                while (1)
-                    ;
-            }
-
-            // Verify the signature and correct car id
-            ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signed_feature->signature, 64);
-            if (ret != 0 || car_id != feature_info->car_id)
-            {
-                mbedtls_pk_free(&pk);
-                return;
-            }
-#else
-        if (receive_board_message_by_type(&message, START_MAGIC) == sizeof(FEATURE_DATA))
-        {
-            FEATURE_DATA *feature_info = (FEATURE_DATA *)buffer;
-
-            if (car_id != feature_info->car_id)
-            {
-                mbedtls_pk_free(&pk);
-                return;
-            }
-#endif // DISABLE_START_VERIFICATION
-
-            // Print out features for all active features
-            for (int i = 0; i < feature_info->num_active; i++)
-            {
-                uint8_t eeprom_message[64];
-                uint32_t offset = feature_info->features[i] * FEATURE_SIZE;
-                if (offset > FEATURE_END)
-                {
-                    offset = FEATURE_END;
-                }
-                EEPROMRead((uint32_t *)eeprom_message, FEATURE_END - offset, FEATURE_SIZE);
-                uart_write(HOST_UART, eeprom_message, FEATURE_SIZE);
-            }
-
-            // Change LED color: green
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);          // r
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);          // b
-            GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // g
+            return;
         }
+
+        // Print out features for all active features
+        for (int i = 0; i < feature_info->num_active; i++)
+        {
+            uint8_t eeprom_message[64];
+            uint32_t offset = feature_info->features[i] * FEATURE_SIZE;
+            if (offset > FEATURE_END)
+            {
+                offset = FEATURE_END;
+            }
+            EEPROMRead((uint32_t *)eeprom_message, FEATURE_END - offset, FEATURE_SIZE);
+            uart_write(HOST_UART, eeprom_message, FEATURE_SIZE);
+        }
+
+        // Change LED color: green
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_1, 0);          // r
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);          // b
+        GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // g
     }
     else
     {
         sendAckFailure();
     }
-
-    mbedtls_pk_free(&pk);
-    return;
 }
 
 /**

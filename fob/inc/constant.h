@@ -15,7 +15,6 @@
 // #define ENBALE_DRBG
 // #define ENABLE_MPU
 #define AES_KEY_SIZE 32
-#define DISABLE_START_VERIFICATION
 
 /*** Macro Definitions ***/
 #define FEATURE_EEPROM_PUB_KEY_LOC 0x0
