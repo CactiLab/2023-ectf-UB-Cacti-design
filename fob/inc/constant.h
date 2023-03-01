@@ -12,8 +12,7 @@
 #include "mbedtls/platform.h"
 
 #define OUTPUT_SIZE 32
-// #define ENBALE_DRBG
-// #define ENABLE_MPU
+#define ENABLE_MPU
 #define AES_KEY_SIZE 32
 
 /*** Macro Definitions ***/

@@ -641,45 +641,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
     message.message_len = sizeof(FEATURE_DATA) + 64;
     message.buffer = buffer + 32;
     send_board_message(&message);
-/*
-    if (receiveAck())
-    {
-#ifndef DISABLE_START_VERIFICATION
-        SIGNED_FEATURE signed_feature;
-        drng_seed("sign challenge");
 
-        // Hash the feature data
-        memcpy(&signed_feature.feature_info, &fob_state_ram->feature_info, sizeof(FEATURE_DATA));
-        ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), (uint8_t *)&signed_feature.feature_info,
-                         sizeof(FEATURE_DATA), hash);
-        if (ret != 0)
-        {
-            while (1)
-                ;
-        }
-
-        // Sign feature hash
-        size_t olen = 0;
-        ret = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, (uint8_t *)&signed_feature.signature, 64,
-                              &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
-        if (ret != 0 || olen != 64)
-        {
-            while (1)
-                ;
-        }
-
-        message.magic = START_MAGIC;
-        message.message_len = sizeof(signed_feature);
-        message.buffer = (uint8_t *)&signed_feature;
-        send_board_message(&message);
-#else
-        message.magic = START_MAGIC;
-        message.message_len = sizeof(FEATURE_DATA);
-        message.buffer = (uint8_t *)&fob_state_ram->feature_info;
-        send_board_message(&message);
-#endif // DISABLE_START_VERIFICATION
-    }
-*/
     mbedtls_pk_free(&pk);
     return 1;
 }
