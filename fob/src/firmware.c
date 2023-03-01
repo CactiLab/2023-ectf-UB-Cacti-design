@@ -66,7 +66,7 @@ typedef struct
     u_int8_t padding[11];
 } PAIR_PACKET;
 
-// Defines a struct for the format of start message
+// Defines a struct for the format of feature data
 typedef struct
 {
     uint8_t car_id;

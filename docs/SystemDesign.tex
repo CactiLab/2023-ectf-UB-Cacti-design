@@ -167,8 +167,8 @@ In other words, a valid feature package can only be packed by the manufacturer.
 In our design, if a packaged feature gets decrypted successfully on a paired fob, the fob will compare the car ID from the decrypted feature package with the one stored in the paired fob.
 Thus, providing a feature package from another car will not pass the checks on the paired fob.
 
-During the unlock, the encrypted feature list will be sent to the car, and this encryption key is protected during the pairing procedure.
-Thus, the attacker cannot retrieve this encryption key from the pairing info package to encrypt an arbitrary feature list.
+During the unlock, the signed feature list will be sent to the car, and this RSA key is protected during the pairing procedure.
+Thus, the attacker cannot retrieve this unlock RSA key from the pairing info package to encrypt an arbitrary feature list.
 They also cannot manipulate the feature list sent to the car during the unlock procedure.
 
 
@@ -239,8 +239,8 @@ To build the paired fob binaries, a car ID (corresponding to this fob) and a fob
 \begin{itemize}
 	\item Retrieve the private unlock RSA key which corresponding to this car ID (\verb|Unlock_Priv:CarID|) from the \textit{secrets} docker volume.
 	\item Retrieve the \verb|Feature_Pub| and \verb|Pair_Pub| from the \textit{secrets} docker volume.
-	\item Generate a hash for the fob pairing PIN.
-	\item Save the \verb|Unlock_Priv:CarID|, \verb|Feature_Pub|, and \verb|Pair_Pub| into the paired fob EEPROM data. Save the car ID and hashed fob pairing PIN in the paired fob firmware.
+	\item Generate a hash for the fob pairing PIN and \verb|Pair_Pub|.
+	\item Save the \verb|Unlock_Priv:CarID|, \verb|Feature_Pub|, and \verb|Pair_Pub| into the paired fob EEPROM data. Save the car ID and the hash in the paired fob firmware.
 \end{itemize}
 
 To build the unpaired fob binaries, we will:
@@ -271,12 +271,12 @@ After building the system, the firmware and EEPROM contents are loaded onto the 
 
 The package feature host tool receives the car ID and the feature number as flags, and is able to read the host secrets.
 \begin{itemize}
-	\item Pack the the car ID, feature number and some control padding together.
+	\item Pack the the car ID, feature number and a random token together.
 	\item Retrieve the \verb|Feature_Priv| from the \textit{secrets} docker volume.
-	\item Encrypt the package using the \verb|Feature_Priv|.
+	\item Sign the package using the \verb|Feature_Priv| and append the signature to the package.
 \end{itemize}
 
-The resulting packaged feature is encrypted by the \verb|Feature_Priv|, and this private RSA key will never be stored outside of the \textit{secrets} docker volume.
+The resulting packaged feature is signed by the \verb|Feature_Priv|, and this private RSA key will never be stored outside of the \textit{secrets} docker volume.
 
 \subsubsection{Pair Fob}
 
@@ -300,8 +300,8 @@ Protection key-points: \textbf{confidentiality of the pairing PIN; confidentiali
 	\item After the paired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pair PIN from the same UART0.
 	\item After the unpaired fob receives the \textit{pair} command, it will enter the state to waiting for receiving the pairing info package from the UART1 which connects to the paired fob.
 	\item The host tool sends the pairing PIN to the paired fob's UART0.
-	\item The paired fob receives the pairing PIN and hash it. Then it checks the hashing result with the saved hashed pairing PIN. If it matches, the paired fob will pack and encrypt the pairing info package with the \verb|Pair_Pub|, and send it to the UART1. If it does not match, the paired fob will lockout for 5 seconds before resuming to listen to the UART messages.
-	\item If the unpaired fob receives the pairing info package through the UART1 socket which connects to the paired fob, it will decrypt it with the \verb|Pair_Priv| and use the info inside to register it as a paired fob.
+	\item The paired fob receives the pairing PIN and hashes the pairing PIN and \verb|Pair_Pub|. Then it checks the hashing result with the saved hash. If it matches, the paired fob will pack and encrypt the pairing info package with a random-generated AES key, and encrypt the AES key with the \verb|Pair_Pub|. Then it send the RSA-encrypted AES key and the AES-encrypted pairing info to the UART1. If the hash does not match, the paired fob will lockout for 5 seconds before resuming to listen to the UART messages.
+	\item If the unpaired fob receives the pairing info package through the UART1 socket which connects to the paired fob, it will first decrypt AES key package with the \verb|Pair_Priv| and use the AES key to decrypt the pairing info package. Then the unpaired fob uses the info inside to register it as a paired fob.
 	\item The unpaired fob (now it's paired) sends the pairing successful message to the UART0 to the host tool.
 \end{enumerate}
 
@@ -309,7 +309,7 @@ Notes:
 \begin{itemize}
 	\item If the pairing PIN check in the paired fob fails, the paired fob will enter the lockout mode which blocks all the UART communication for 5 seconds. This is to prevent the brute force cracking of the pairing PIN.
 	\item The pairing info package contains the car ID, the \verb|Unlock_Priv:CarID|, and the hashed pairing PIN.
-	\item After the unpaired fob registers it as a paired fob, the saved \verb|Pair_Priv| will be erased.
+	\item After the unpaired fob registers it as a paired fob, the saved \verb|Pair_Priv| will be overwritten by the \verb|Unlock_Priv:CarID|.
 \end{itemize}
 
 \subsubsection{Enable Feature}
@@ -332,14 +332,14 @@ Protection key-points: \textbf{integrity of the packaged feature.}
 	\item The host tool starts the connection to the paired fob's UART0 for serial transaction.
 	\item The host tool sends the \textit{enable} command to the paired fob's UART0.
 	\item After the paired fob receives the \textit{enable} command, it will enter the state to waiting for receiving the packaged feature from the same UART0.
-	\item The host tool opens and sends the content of the packaged feature to the paired fob's UART0.
-	\item The paired fob receives and verifies the package with the \verb|Feature_Pub|. If 1) the car ID in package matches the saved car ID, 2) the enabled feature list is not full, and 3) this feature has not been enabled previously, the paired fob will enable this feature and save the new feature list.
+	\item The host tool reads and sends the content of the packaged feature to the paired fob's UART0.
+	\item The paired fob receives and verifies the feature data with the \verb|Feature_Pub|. If 1) the car ID in data matches the saved car ID, 2) the enabled feature list is not full, and 3) this feature has not been enabled previously, the paired fob will enable this feature and save the new feature list.
 	\item The paired fob sends the enable successful message to the UART0 to the host tool.
 \end{enumerate}
 
 Notes:
 \begin{itemize}
-	\item The paired fob uses the \verb|Feature_Pub| to verify the received feature package.
+	\item The paired fob uses the \verb|Feature_Pub| and the received signature to verify the received feature data.
 \end{itemize}
 
 \subsubsection{Unlock and Start Car}
@@ -363,10 +363,8 @@ Protection key-points: \textbf{authenticity of the paired fob; integrity of the 
 	\item The paired fob sends the \textit{unlock} command to the UART1, and enter the state to waiting for receiving a respond from the same UART1 socket.
 	\item After the car receives the \textit{unlock} command, it will generate a random value. This random value is called \textit{challenge}.
 	\item The car sends the \textit{challenge} package to the the UART1, and enter the state to waiting for receiving a respond from the same UART1.
-	\item The paired fob receives the \textit{challenge} package and get this random value. Then it hashes this random value, and sign it with the \verb|Unlock_Priv:CarID|. The resulting signature is called \textit{answer}, which will be sent to the UART1 to the car.
-	\item The car receives the \textit{answer} package and verify it with the previous random value and \verb|Unlock_Pub:CarID|. If the verification passes, the car will send the unlock secret to the UART0 to the host computer, and also send an ACK message to the UART1 to the paired fob.
-	\item After the paired fob receives the ACK message, it will sign the feature list with  \verb|Unlock_Priv:CarID|, and send the feature list along with the signature to the UART1 to the car.
-	\item The car receives the feature list and the signature and verify it's integrity. If the verification passes, the car will match the feature list and send the feature secret(s) to the UART0 to the host computer.
+	\item The paired fob receives the \textit{challenge} package and get this random value. Then it hashes the combination of this random value and the current feature info, and sign it with the \verb|Unlock_Priv:CarID|. The resulting signature is called \textit{answer}, which will be sent to the UART1 to the car with the feature info package.
+	\item The car receives the \textit{answer} and verifies it with the combination of the previous random value and the feature info using \verb|Unlock_Pub:CarID|. If the verification passes, the car will send the unlock secret and then match the feature list and send the feature secret(s) to the UART0 to the host computer.
 \end{enumerate}
 
 \end{document}
