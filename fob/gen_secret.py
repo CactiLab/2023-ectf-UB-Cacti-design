@@ -1,14 +1,9 @@
 #!/usr/bin/python3 -u
 
-# @file gen_secret
-# @author Jake Grycel
-# @brief Example script to generate header containing secrets for the fob
+# @file gen_secret.py
+# @author Zheyuan Ma
+# @brief Script to generate header and eeprom data for the fob
 # @date 2023
-#
-# This source file is part of an example system for MITRE's 2023 Embedded CTF (eCTF).
-# This code is being provided only for educational purposes for the 2023 MITRE eCTF
-# competition, and may not meet MITRE standards for quality. Use this code at your
-# own risk!
 #
 # @copyright Copyright (c) 2023 The MITRE Corporation
 
@@ -47,7 +42,6 @@ def generate_rsa_key_pair(key_size, public_key_file, private_key_file):
 def generate_hashed_pin(pin, image_pairing_pub_key_data):
     m = hashlib.sha256(bytes(pin, 'utf-8') + image_pairing_pub_key_data)
     hash = m.digest()
-    print("Hashed pin: " + bytes.hex(hash))  # TODO: Remove
     return array.array('B', hash)
 
 
@@ -127,6 +121,5 @@ def main():
     args.eeprom_file.write_bytes(eeprom_data)
     
     
-
 if __name__ == "__main__":
     main()

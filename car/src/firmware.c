@@ -1,15 +1,10 @@
 /**
- * @file main.c
- * @author Frederich Stine
- * @brief eCTF Car Example Design Implementation
+ * @file firmware.c
+ * @author Zheyuan Ma
+ * @brief eCTF Car UB Design Implementation
  * @date 2023
  *
- * This source file is part of an example system for MITRE's 2023 Embedded
- * System CTF (eCTF). This code is being provided only for educational purposes
- * for the 2023 MITRE eCTF competition, and may not meet MITRE standards for
- * quality. Use this code at your own risk!
- *
- * @copyright Copyright (c) 2023 The MITRE Corporation
+ * @copyright Copyright (c) 2023 UB Cacti Lab
  */
 
 #include <stdbool.h>
@@ -55,17 +50,12 @@ typedef struct
 extern mbedtls_ctr_drbg_context ctr_drbg;
 uint8_t memory_buf[8192];
 uint8_t challenge[32] = {0};
+const uint8_t car_id = CAR_ID;
 
 /*** Function definitions ***/
 // Core functions - unlockCar and startCar
 bool sendChallenge(void);
 void receiveAnswerStartCar(void);
-
-// Helper functions - sending ack messages
-void sendAckSuccess(void);
-void sendAckFailure(void);
-
-const uint8_t car_id = CAR_ID;
 
 /**
  * @brief Main function for the car example
@@ -123,14 +113,14 @@ bool sendChallenge(void)
     uint8_t buffer[256];
     message.buffer = buffer;
 
-    // Receive packet with some error checking
+    // Receive unlock command
     ret = receive_board_message_by_type(&message, UNLOCK_MAGIC);
     if (ret != 0)
     {
         return false;
     }
 
-    // Generate challenge
+    // Generate challenge(32)
     memset(challenge, 0, sizeof(challenge));
     drng_seed("challenge");
     ret = mbedtls_ctr_drbg_random(&ctr_drbg, challenge, sizeof(challenge));
@@ -157,7 +147,7 @@ void receiveAnswerStartCar()
     uint8_t buffer[256];
     message.buffer = buffer + sizeof(challenge);
 
-    // Receive packet with some error checking
+    // Receive FEATURE_DATA(5) and SIGNATURE(64)
     if (receive_board_message_by_type(&message, ANSWER_MAGIC) != sizeof(FEATURE_DATA) + 64)
     {
         return;
@@ -166,7 +156,6 @@ void receiveAnswerStartCar()
     // The buffer has: CHALLENGE(32), FEATURE_DATA(5), SIGNATURE(64)
     memcpy(buffer, challenge, sizeof(challenge));
     memset(challenge, 0, sizeof(challenge));
-    // uint8_t *signature = buffer;
 
     int ret = 0;
     uint8_t eeprom_unlock_pub_key[EEPROM_UNLOCK_PUB_SIZE] = {0};
@@ -238,42 +227,4 @@ void receiveAnswerStartCar()
         GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);          // b
         GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // g
     }
-    else
-    {
-        sendAckFailure();
-    }
-}
-
-/**
- * @brief Function to send successful ACK message
- */
-void sendAckSuccess(void)
-{
-    // Create packet for successful ack and send
-    MESSAGE_PACKET message;
-
-    uint8_t buffer[1];
-    message.buffer = buffer;
-    message.magic = ACK_MAGIC;
-    buffer[0] = ACK_SUCCESS;
-    message.message_len = 1;
-
-    send_board_message(&message);
-}
-
-/**
- * @brief Function to send unsuccessful ACK message
- */
-void sendAckFailure(void)
-{
-    // Create packet for unsuccessful ack and send
-    MESSAGE_PACKET message;
-
-    uint8_t buffer[1];
-    message.buffer = buffer;
-    message.magic = ACK_MAGIC;
-    buffer[0] = ACK_FAIL;
-    message.message_len = 1;
-
-    send_board_message(&message);
 }

@@ -10,7 +10,6 @@ import argparse
 import secrets
 from pathlib import Path
 from mbedtls import pk
-from mbedtls import hashlib
 
 # @brief Function to create a new feature package
 # @param package_name, name of the file to output package data to
@@ -23,7 +22,6 @@ def package(package_name, car_id, feature_number, secrets_folder, package_dir):
         car_id.to_bytes(1, "little")
         + feature_number.to_bytes(1, "little")
         + secrets.token_bytes(8)
-        # + str.encode("\n")
     )
     print("Package: ", bytes.hex(package_message_bytes))
     

@@ -1,3 +1,12 @@
+/**
+ * @file mpu_init.c
+ * @author Xi Tan, Zheyuan Ma
+ * @brief eCTF UB MPU Initialization
+ * @date 2023
+ *
+ * @copyright Copyright (c) 2023 UB Cacti Lab
+ */
+
 #include <stdint.h>
 #include <stdbool.h>
 #include "driverlib/debug.h"

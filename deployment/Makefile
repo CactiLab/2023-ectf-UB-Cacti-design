@@ -1,12 +1,8 @@
 #  2023 eCTF
 #  Deployment Makefile
-#  Kyle Scaplen
+#  Zheyuan Ma
 #
-#  (c) 2023 The MITRE Corporation
-#
-# This source file is part of an example system for MITRE's 2023 Embedded System CTF (eCTF).
-# This code is being provided only for educational purposes for the 2023 MITRE eCTF competition,
-# and may not meet MITRE standards for quality. Use this code at your own risk!
+#  Copyright (c) 2023 UB Cacti Lab
 
 # function to check required arguments
 check_defined = \
@@ -18,5 +14,4 @@ __check_defined = \
 
 all:
 	$(call check_defined SECRETS_DIR)
-	echo "SECRET!" > ${SECRETS_DIR}/global_secrets.txt
 	python3 depl_key_gen.py ${SECRETS_DIR}

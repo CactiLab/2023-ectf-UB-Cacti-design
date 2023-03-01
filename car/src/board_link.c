@@ -1,5 +1,5 @@
 /**
- * @file board_link.h
+ * @file board_link.c
  * @author Frederich Stine
  * @brief Firmware UART interface implementation.
  * @date 2023

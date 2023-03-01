@@ -1,12 +1,8 @@
 #  2023 eCTF
 #  Car Makefile
-#  Kyle Scaplen
+#  Zheyuan Ma
 #
-#  (c) 2023 The MITRE Corporation
-#
-# This source file is part of an example system for MITRE's 2023 Embedded System CTF (eCTF).
-# This code is being provided only for educational purposes for the 2023 MITRE eCTF competition,
-# and may not meet MITRE standards for quality. Use this code at your own risk!
+#  Copyright (c) 2023 UB Cacti Lab
 
 # define the part type and base directory - must be defined for makedefs to work
 PART=TM4C123GH6PM
@@ -87,7 +83,6 @@ ${COMPILER}:
 
 
 # for each source file that needs to be compiled besides the file that defines `main`
-
 ${COMPILER}/firmware.axf: ${COMPILER}/uart.o
 ${COMPILER}/firmware.axf: ${COMPILER}/board_link.o
 ${COMPILER}/firmware.axf: ${COMPILER}/firmware.o

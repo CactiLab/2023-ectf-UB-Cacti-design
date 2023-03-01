@@ -1,3 +1,13 @@
+#!/usr/bin/python3 -u
+
+# @file depl_key_gen.py
+# @author Zheyuan Ma
+# @brief Script to generate deployment key pairs
+# @date 2023
+#
+# @copyright Copyright (c) 2023 UB Cacti Lab
+
+
 import os
 import argparse
 from mbedtls import pk

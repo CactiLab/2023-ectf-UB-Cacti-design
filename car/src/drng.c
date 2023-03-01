@@ -1,3 +1,12 @@
+/**
+ * @file drng.c
+ * @author Xi Tan, Zheyuan Ma
+ * @brief eCTF UB Random Number Generator
+ * @date 2023
+ *
+ * @copyright Copyright (c) 2023 UB Cacti Lab
+ */
+
 #include "mbedtls/entropy.h"
 #include "mbedtls/build_info.h"
 #include "mbedtls/ctr_drbg.h"
@@ -64,8 +73,7 @@ int drng_seed(char *pers)
                               (uint8_t *)pers, strlen(pers)) != 0)
     {
         while (1)
-        {
-        }
+            ;
     }
     return 0;
 }

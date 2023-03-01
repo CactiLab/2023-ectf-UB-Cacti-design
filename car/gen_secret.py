@@ -1,16 +1,11 @@
 #!/usr/bin/python3 -u
 
-# @file gen_secret
-# @author Jake Grycel
-# @brief Example script to generate header containing secrets for the car
+# @file gen_secret.py
+# @author Zheyuan Ma
+# @brief Script to generate header and eeprom data for the car
 # @date 2023
 #
-# This source file is part of an example system for MITRE's 2023 Embedded CTF (eCTF).
-# This code is being provided only for educational purposes for the 2023 MITRE eCTF
-# competition,and may not meet MITRE standards for quality. Use this code at your
-# own risk!
-#
-# @copyright Copyright (c) 2023 The MITRE Corporation
+# @copyright Copyright (c) 2023 UB Cacti Lab
 
 import argparse
 from pathlib import Path

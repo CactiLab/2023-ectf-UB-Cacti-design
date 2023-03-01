@@ -1,15 +1,10 @@
 /**
- * @file main.c
- * @author Frederich Stine
- * @brief eCTF Fob Example Design Implementation
+ * @file firmware.c
+ * @author Zheyuan Ma
+ * @brief eCTF Car UB Design Implementation
  * @date 2023
  *
- * This source file is part of an example system for MITRE's 2023 Embedded
- * System CTF (eCTF). This code is being provided only for educational purposes
- * for the 2023 MITRE eCTF competition, and may not meet MITRE standards for
- * quality. Use this code at your own risk!
- *
- * @copyright Copyright (c) 2023 The MITRE Corporation
+ * @copyright Copyright (c) 2023 UB Cacti Lab
  */
 
 #include <stdbool.h>
@@ -111,9 +106,6 @@ void pairFob(FLASH_DATA *fob_state_ram);
 void sendUnlock(FLASH_DATA *fob_state_ram);
 uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram);
 void enableFeature(FLASH_DATA *fob_state_ram);
-
-// Helper functions - receive ack message
-uint8_t receiveAck();
 
 /**
  * @brief Main function for the fob example
@@ -261,6 +253,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
     // Start pairing transaction - fob is already paired
     if (fob_state_ram->paired == FLASH_PAIRED)
     {
+        // The pin_buffer has: pin(6), public pairing key(EEPROM_PAIRING_PUB_SIZE)
         uint8_t pin_buffer[6 + EEPROM_PAIRING_PUB_SIZE] = {0};
         uart_write(HOST_UART, (uint8_t *)"P", 1);
 
@@ -273,6 +266,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
         EEPROMRead((uint32_t *)((uint8_t *)pin_buffer + 6), PAIRING_EEPROM_PUB_KEY_LOC,
                    EEPROM_PAIRING_PUB_SIZE);
 
+        // Hash the pin buffer
         uint8_t hash[32] = {0};
         ret = mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), pin_buffer,
                          sizeof(pin_buffer), hash);
@@ -282,11 +276,10 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 ;
         }
 
-        // Compare hash with stored hash
+        // Compare pin_buffer hash with stored hash
         if (memcmp(hash, fob_state_ram->pair_info.pin_hash, 32) == 0)
         {
             int ret = 0;
-
             PAIR_PACKET pair_packet;
             memcpy(&pair_packet.pair_info, &fob_state_ram->pair_info, sizeof(PAIR_INFO));
 
@@ -296,6 +289,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
 
             AES_INFO aes_info;
             drng_seed("aes generate key");
+            // Generate random AES key
             ret = mbedtls_ctr_drbg_random(&ctr_drbg, aes_info.key, AES_KEY_SIZE);
             if (ret != 0)
             {
@@ -303,6 +297,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                     ;
             }
 
+            // Generate random AES IV
             uint8_t ciphertext_iv[sizeof(PAIR_PACKET) + 16] = {0};
             ret = mbedtls_ctr_drbg_random(&ctr_drbg, ciphertext_iv + sizeof(PAIR_PACKET), 16);
             if (ret != 0)
@@ -311,11 +306,13 @@ void pairFob(FLASH_DATA *fob_state_ram)
                     ;
             }
 
+            // AES-CBC requires input to be a multiple of 16 bytes
             size_t input_len = ((sizeof(PAIR_PACKET) + 15) / 16) * 16;
-            // size_t input_len = sizeof(PAIR_PACKET);
             uint8_t iv[16] = {0};
+            // Copy the iv from the ciphertext_iv buffer as it will be updated
             memcpy(iv, ciphertext_iv + sizeof(PAIR_PACKET), 16);
 
+            // Init AES context with key
             mbedtls_aes_init(&aes);
             ret = mbedtls_aes_setkey_enc(&aes, aes_info.key, 256);
             if (ret != 0)
@@ -323,6 +320,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 while (1)
                     ;
             }
+            // Encrypt the pair packet with AES-CBC
             ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, input_len,
                                         iv, (uint8_t *)&pair_packet, ciphertext_iv);
             if (ret != 0)
@@ -342,7 +340,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
             }
 
             mbedtls_pk_init(&pk);
-            // Parse pairing public key
+            // Parse public pairing key
             ret = mbedtls_pk_parse_public_key(&pk, ((uint8_t *)pin_buffer + 6), PAIRING_PUB_KEY_SIZE);
             if (ret != 0)
             {
@@ -350,7 +348,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                     ;
             }
 
-            // Encrypt AES key and hash with pairing public key
+            // Encrypt AES key and hash with public pairing key
             uint8_t aes_info_cipher[64] = {0};
             size_t olen = 0;
             drng_seed("encrypt aes");
@@ -370,11 +368,12 @@ void pairFob(FLASH_DATA *fob_state_ram)
             message.buffer = aes_info_cipher;
             send_board_message(&message);
 
-            // Send encrypted pairing data to board
+            // Send AES-encrypted pairing data (ciphertext and iv) to board
             send_pairing_data(ciphertext_iv);
         }
         else
         {
+            // Wait 5 seconds before trying again
             for (int i = 0; i < 80000000 * 5; i++)
                 ;
         }
@@ -385,11 +384,14 @@ void pairFob(FLASH_DATA *fob_state_ram)
         uint8_t buffer[256];
         uint8_t ciphertext_iv[PAIR_DATA_LEN];
         message.buffer = buffer;
+
+        // Receive encrypted AES key and hash
         if (receive_board_message_by_type(&message, PAIR_MAGIC) != 64)
         {
             return;
         }
 
+        // Receive AES-encrypted pairing data (ciphertext and iv)
         receive_pairing_data(ciphertext_iv);
 
         // Read pairing private key from EEPROM
@@ -399,7 +401,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
 
         mbedtls_pk_init(&pk);
         drng_seed("decrypt aes info");
-        // Parse private key
+        // Parse pairing private key
         ret = mbedtls_pk_parse_key(&pk, eeprom_pairing_priv_key, PAIRING_PRIV_KEY_SIZE, NULL, 0,
                                    mbedtls_ctr_drbg_random, &ctr_drbg);
         if (ret != 0)
@@ -408,13 +410,14 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 ;
         }
 
-        // Decrypt message with private key
+        // Decrypt AES key and hash with pairing private key
         AES_INFO aes_info;
         size_t olen = 0;
         ret = mbedtls_pk_decrypt(&pk, message.buffer, message.message_len, (uint8_t *)&aes_info,
                                  &olen, sizeof(AES_INFO), mbedtls_ctr_drbg_random, &ctr_drbg);
         if (ret != 0)
         {
+            mbedtls_pk_free(&pk);
             return;
         }
 
@@ -428,16 +431,20 @@ void pairFob(FLASH_DATA *fob_state_ram)
                 ;
         }
 
+        // Check if the received data hash matches the decrypted hash
         if (memcmp(hash, aes_info.hash, 20) == 0)
         {
             PAIR_PACKET pair_packet;
             size_t input_len = ((sizeof(PAIR_PACKET) + 15) / 16) * 16;
+
+            // Init AES context with key
             mbedtls_aes_init(&aes);
             ret = mbedtls_aes_setkey_dec(&aes, aes_info.key, 256);
             if (ret != 0)
             {
                 return;
             }
+            // Decrypt the pair packet with AES-CBC
             ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, input_len,
                                         ciphertext_iv + sizeof(PAIR_PACKET),
                                         ciphertext_iv, (uint8_t *)&pair_packet);
@@ -447,15 +454,19 @@ void pairFob(FLASH_DATA *fob_state_ram)
             }
             mbedtls_aes_free(&aes);
 
+            // Register the fob as paired
             fob_state_ram->paired = FLASH_PAIRED;
+            // Overwrite the pairing private key in EEPROM with the unlock private key
             EEPROMProgram((uint32_t *)pair_packet.unlock_priv_key,
                           UNLOCK_EEPROM_PRIV_KEY_LOC, EEPROM_UNLOCK_PRIV_SIZE);
+            // Update the fob state with the new pairing info
             memcpy(&fob_state_ram->pair_info, &pair_packet.pair_info, sizeof(PAIR_INFO));
             fob_state_ram->feature_info.car_id = fob_state_ram->pair_info.car_id;
 
             uart_write(HOST_UART, (uint8_t *)"Paired", 6);
             saveFobState(fob_state_ram);
         }
+
         mbedtls_pk_free(&pk);
     }
 }
@@ -477,22 +488,21 @@ void enableFeature(FLASH_DATA *fob_state_ram)
     message.buffer = buffer;
 
     message.magic = (uint8_t)uart_readb(HOST_UART);
-
     if (message.magic != ENABLE_MAGIC)
     {
         return;
     }
-
     message.message_len = (uint8_t)uart_readb(HOST_UART);
     uart_read(HOST_UART, message.buffer, message.message_len);
 
+    // Message buffer has: ENABLE_PACKET(10), signature(64)
     ENABLE_PACKET *packet = (ENABLE_PACKET *)message.buffer;
     uint8_t *signature = message.buffer + sizeof(ENABLE_PACKET);
 
     int ret = 0;
     mbedtls_pk_context pk;
 
-    // Read public key from EEPROM
+    // Read feature public key from EEPROM
     uint8_t eeprom_feature_pub_key[EEPROM_FEATURE_PUB_SIZE] = {0};
     EEPROMRead((uint32_t *)eeprom_feature_pub_key, FEATURE_EEPROM_PUB_KEY_LOC,
                EEPROM_FEATURE_PUB_SIZE);
@@ -506,7 +516,7 @@ void enableFeature(FLASH_DATA *fob_state_ram)
         return;
     }
 
-    // Parse public key
+    // Parse feature public key
     mbedtls_pk_init(&pk);
     ret = mbedtls_pk_parse_public_key(&pk, eeprom_feature_pub_key, FEATURE_PUB_KEY_SIZE);
     if (ret != 0)
@@ -514,7 +524,7 @@ void enableFeature(FLASH_DATA *fob_state_ram)
         goto cleanup;
     }
 
-    // Verify the signature
+    // Verify the signature with the feature public key
     ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, signature, 64);
     if (ret != 0)
     {
@@ -542,6 +552,7 @@ void enableFeature(FLASH_DATA *fob_state_ram)
         }
     }
 
+    // Add feature to list
     fob_state_ram->feature_info.features[fob_state_ram->feature_info.num_active] = packet->feature;
     fob_state_ram->feature_info.num_active++;
 
@@ -655,20 +666,4 @@ void saveFobState(FLASH_DATA *flash_data)
 {
     FlashErase(FOB_STATE_PTR);
     FlashProgram((uint32_t *)flash_data, FOB_STATE_PTR, FLASH_DATA_SIZE);
-}
-
-/**
- * @brief Function that receives an ack and returns whether ack was
- * success/failure
- *
- * @return uint8_t Ack success/failure
- */
-uint8_t receiveAck()
-{
-    MESSAGE_PACKET message;
-    uint8_t buffer[255];
-    message.buffer = buffer;
-    receive_board_message_by_type(&message, ACK_MAGIC);
-
-    return message.buffer[0];
 }

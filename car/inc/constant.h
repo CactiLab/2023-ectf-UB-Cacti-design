@@ -1,3 +1,12 @@
+/**
+ * @file constant.h
+ * @author Xi Tan, Zheyuan Ma
+ * @brief eCTF UB Constant Definitions
+ * @date 2023
+ *
+ * @copyright Copyright (c) 2023 UB Cacti Lab
+ */
+
 #ifndef CONSTANT_H
 #define CONSTANT_H
 
