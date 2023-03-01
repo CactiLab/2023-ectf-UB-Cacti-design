@@ -86,33 +86,6 @@ unpaired_fob: unpaired_fob_gen_secret
 unpaired_fob: ${COMPILER}/firmware.axf
 unpaired_fob: copy_artifacts
 
-
-################ start crypto example ################
-# example AES rules to build in tiny-AES-c: https://github.com/kokke/tiny-AES-c
-# make sure submodule has been pulled (run `git submodule update --init`)
-# uncomment next line to activate
-# EXAMPLE_AES=foo
-ifdef EXAMPLE_AES
-# path to crypto library
-CRYPTOPATH=${ROOT}/lib/tiny-AES-c
-
-# add path to crypto source files to source path
-VPATH+=${CRYPTOPATH}
-
-# add crypto library to includes path
-IPATH+=${CRYPTOPATH}
-
-# add crypto object file to includes path
-# LDFLAGS+=${COMPILER}/aes.o
-
-# add compiler flag to enable example AES code 
-CFLAGS+=-DEXAMPLE_AES
-
-# add rule to build crypto library
-${COMPILER}/firmware.axf: ${COMPILER}/aes.o
-endif
-################ end crypto example ################
-
 build_mbedtls:
 	@python3 -m pip install -r ${MBEDTLS_ROOT}/scripts/basic.requirements.txt
 	@mkdir -p ${ROOT}/lib/mbedtls_build && cd ${ROOT}/lib/mbedtls_build
