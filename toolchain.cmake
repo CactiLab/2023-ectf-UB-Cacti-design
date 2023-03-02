@@ -1,3 +1,8 @@
+# @file toolchain.cmake
+# @author Zheyuan Ma
+# @brief CMake toolchain file for cross-compiling
+# @date 2023
+
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_VERSION 1)
 # set(CMAKE_SYSTEM_PROCESSOR armv7-m)
