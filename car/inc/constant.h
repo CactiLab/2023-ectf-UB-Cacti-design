@@ -21,7 +21,7 @@
 #include "mbedtls/platform.h"
 
 #define OUTPUT_SIZE 32
-// #define ENABLE_MPU
+#define ENABLE_MPU
 
 /*** Macro Definitions ***/
 #define UNLOCK_EEPROM_PUB_KEY_LOC 0x0
