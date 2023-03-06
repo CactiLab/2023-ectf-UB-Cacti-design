@@ -186,8 +186,7 @@ void receiveAnswerStartCar()
     ret = mbedtls_pk_parse_public_key(&pk, eeprom_unlock_pub_key, UNLOCK_PUB_KEY_SIZE);
     if (ret != 0)
     {
-        while (1)
-            ;
+        sys_reset();
     }
 
     // Hash the challenge and feature info
@@ -196,8 +195,7 @@ void receiveAnswerStartCar()
                      32 + sizeof(FEATURE_DATA), hash);
     if (ret != 0)
     {
-        while (1)
-            ;
+        sys_reset();
     }
 
     // Verify the signature

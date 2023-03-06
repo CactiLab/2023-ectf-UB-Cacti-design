@@ -72,8 +72,7 @@ int drng_seed(char *pers)
     if (mbedtls_ctr_drbg_seed(&ctr_drbg, ctr_drbg_dwt_entropy, &entropy,
                               (uint8_t *)pers, strlen(pers)) != 0)
     {
-        while (1)
-            ;
+        sys_reset();
     }
     return 0;
 }

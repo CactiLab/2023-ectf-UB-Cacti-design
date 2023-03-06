@@ -19,6 +19,8 @@
 
 // SRAM: (0x20000000-0x20008000)/1024 = 32k
 
+#define SCB_AIRCR (*(volatile uint32_t *)0xE000ED0C)
+
 void mpu_handler(void)
 {
     ASSERT(MPU_RGN_SIZE_16K);
@@ -59,6 +61,16 @@ void mpu_init()
     MPUIntRegister(mpu_handler);
     MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 
+    __asm("dsb");
+    __asm("isb");
+}
+
+// Trigger a system reset
+void sys_reset()
+{
+    __asm("dsb");
+    __asm("isb");
+    SCB_AIRCR = (0x05FA << 16) | 0x1 << 2;
     __asm("dsb");
     __asm("isb");
 }

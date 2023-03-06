@@ -40,6 +40,7 @@
 #define ARM_CM_DWT_CYCCNT (*(uint32_t *)0xE0001004) // DWT->CYCCNT
 
 void mpu_init();
+void sys_reset();
 
 void dwt_init(void);
 int ctr_drbg_dwt_entropy(void *data, unsigned char *buf, size_t len);
