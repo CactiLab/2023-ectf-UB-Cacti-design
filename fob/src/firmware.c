@@ -286,8 +286,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                          sizeof(pin_buffer), hash);
         if (ret != 0)
         {
-            while (1)
-                ;
+            sys_reset();
         }
 
         // Compare pin_buffer hash with stored hash
@@ -307,8 +306,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
             ret = mbedtls_ctr_drbg_random(&ctr_drbg, aes_info.key, AES_KEY_SIZE);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
 
             // Generate random AES IV
@@ -316,8 +314,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
             ret = mbedtls_ctr_drbg_random(&ctr_drbg, ciphertext_iv + sizeof(PAIR_PACKET), 16);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
 
             // AES-CBC requires input to be a multiple of 16 bytes
@@ -331,16 +328,14 @@ void pairFob(FLASH_DATA *fob_state_ram)
             ret = mbedtls_aes_setkey_enc(&aes, aes_info.key, 256);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
             // Encrypt the pair packet with AES-CBC
             ret = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, input_len,
                                         iv, (uint8_t *)&pair_packet, ciphertext_iv);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
             mbedtls_aes_free(&aes);
 
@@ -349,8 +344,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                              sizeof(ciphertext_iv), aes_info.hash);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
 
             mbedtls_pk_init(&pk);
@@ -358,8 +352,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
             ret = mbedtls_pk_parse_public_key(&pk, ((uint8_t *)pin_buffer + 6), PAIRING_PUB_KEY_SIZE);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
 
             // Encrypt AES key and hash with public pairing key
@@ -371,8 +364,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                                      mbedtls_ctr_drbg_random, &ctr_drbg);
             if (ret != 0)
             {
-                while (1)
-                    ;
+                sys_reset();
             }
             mbedtls_pk_free(&pk);
 
@@ -420,8 +412,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                                    mbedtls_ctr_drbg_random, &ctr_drbg);
         if (ret != 0)
         {
-            while (1)
-                ;
+            sys_reset();
         }
 
         // Decrypt AES key and hash with pairing private key
@@ -441,8 +432,7 @@ void pairFob(FLASH_DATA *fob_state_ram)
                          sizeof(ciphertext_iv), hash);
         if (ret != 0)
         {
-            while (1)
-                ;
+            sys_reset();
         }
 
         // Check if the received data hash matches the decrypted hash
@@ -634,8 +624,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
                                mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0)
     {
-        while (1)
-            ;
+        sys_reset();
     }
 
     // Hash the challenge and feature info
@@ -644,8 +633,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
                      buffer, 32 + sizeof(FEATURE_DATA), hash);
     if (ret != 0)
     {
-        while (1)
-            ;
+        sys_reset();
     }
 
     // Sign the hash
@@ -656,8 +644,7 @@ uint8_t recChalSendAnsFeature(FLASH_DATA *fob_state_ram)
                           &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0 || olen != 64)
     {
-        while (1)
-            ;
+        sys_reset();
     }
 
     // Send the feature info and signature

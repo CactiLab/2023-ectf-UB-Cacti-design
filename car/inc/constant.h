@@ -31,14 +31,13 @@
 #define UNLOCK_EEPROM_LOC 0x7C0
 #define UNLOCK_EEPROM_SIZE 64
 
-
-
 #define DWT_TRACE_ENABLE 0x40000001
 #define ARM_CM_DEMCR (*(uint32_t *)0xE000EDFC)
 #define ARM_CM_DWT_CTRL (*(uint32_t *)0xE0001000)   // DWT->CTRL (core_cm33.h, DWT_Type)
 #define ARM_CM_DWT_CYCCNT (*(uint32_t *)0xE0001004) // DWT->CYCCNT
 
 void mpu_init();
+void sys_reset();
 
 void dwt_init(void);
 int ctr_drbg_dwt_entropy(void *data, unsigned char *buf, size_t len);
